@@ -1,5 +1,171 @@
 import json
 from collections import defaultdict, deque
+from graphviz import Digraph
+import random
+
+class MetricEvaluator:
+    def __init__(self, metrics, input_values, lookup_matrices=None):
+        self.metrics = metrics
+        self.input_values = input_values
+        self.results = {}
+        self.lookup_matrices = lookup_matrices or {}
+        self.rule_usage = defaultdict(int)
+
+        self.dispatch_map = {
+            "threshold": self.evaluate_threshold,
+            "map_value": self.evaluate_map_value,
+            "max": self.evaluate_max,
+            "custom": self.evaluate_custom,
+            "lookup_matrix": self.evaluate_lookup_matrix
+        }
+
+    def evaluate_metric(self, m_id):
+        metric = self.metrics[m_id]
+        mtype = metric["type"]
+
+        if mtype not in self.dispatch_map:
+            raise ValueError(f"Unknown metric type: {mtype}")
+
+        return self.dispatch_map[mtype](m_id, metric)
+
+    def evaluate_threshold(self, m_id, metric):
+        value = self.input_values.get(metric["dependencies"][0], self.results.get(metric["dependencies"][0]))
+        thresholds = metric["expression"]
+        if value < thresholds[0]:
+            self.rule_usage[f"{m_id}_<low"] += 1
+            return "Low"
+        elif value < thresholds[1]:
+            self.rule_usage[f"{m_id}_<moderate"] += 1
+            return "Moderate"
+        elif value < thresholds[2]:
+            self.rule_usage[f"{m_id}_<high"] += 1
+            return "High"
+        else:
+            self.rule_usage[f"{m_id}_>=high"] += 1
+            return "Critical"
+
+    def evaluate_map_value(self, m_id, metric):
+        value = self.results.get(metric["dependencies"][0])
+        self.rule_usage[f"{m_id}_map_value"] += 1
+        return metric["expression"].get(str(value), "NR")
+
+    def evaluate_max(self, m_id, metric):
+        values = [self.results[dep] for dep in metric["dependencies"]]
+        self.rule_usage[f"{m_id}_max"] += 1
+        return max(values)
+
+    def evaluate_custom(self, m_id, metric):
+        local_vars = {dep: self.results.get(dep, self.input_values.get(dep)) for dep in metric["dependencies"]}
+        expr = metric["expression"]
+        func = eval(expr, {"lookup": self.lookup})  # Inject lookup here
+        self.rule_usage[f"{m_id}_custom"] += 1
+        return func(**local_vars)
+
+    def lookup(self, a, b):
+        return a if a == b else b
+
+    def evaluate_lookup_matrix(self, m_id, metric):
+        matrix = self.lookup_matrices[metric["matrix_ref"]]
+        val1 = self.results.get(metric["dependencies"][0])
+        val2 = self.results.get(metric["dependencies"][1])
+        self.rule_usage[f"{m_id}_{val1}_{val2}_lookup"] += 1
+        return matrix.get(val1, {}).get(val2, "N/A")
+
+    def run_evaluation(self, eval_order):
+        for m_id in eval_order:
+            self.results[m_id] = self.evaluate_metric(m_id)
+        return self.results
+
+def get_eval_order(metrics):
+    graph = defaultdict(list)
+    indegree = defaultdict(int)
+
+    all_metrics = set(metrics.keys())
+    for metric, config in metrics.items():
+        for dep in config.get("dependencies", []):
+            if dep in all_metrics:
+                graph[dep].append(metric)
+                indegree[metric] += 1
+            indegree.setdefault(dep, 0)
+
+    queue = deque([m for m in metrics if indegree[m] == 0])
+    order = []
+    while queue:
+        m = queue.popleft()
+        order.append(m)
+        for neighbor in graph[m]:
+            indegree[neighbor] -= 1
+            if indegree[neighbor] == 0:
+                queue.append(neighbor)
+    return order
+
+def generate_decision_tree(metrics, results, aggregated_rule_usage):
+    dot = Digraph(comment="Aggregated Decision Tree")
+
+    for metric_id, details in metrics.items():
+        value = results.get(metric_id, "Pending")
+        usage = sum(v for k, v in aggregated_rule_usage.items() if k.startswith(metric_id))
+        fontsize = str(12 + usage)
+        dot.node(metric_id, f"{metric_id}\n{value}\nUsed: {usage}", shape="box", style="filled", color="lightblue", fontsize=fontsize)
+
+        for dep in details.get("dependencies", []):
+            dot.edge(dep, metric_id)
+
+    dot.render("decision_tree_usage", format="png", cleanup=True)
+    print("✅ Aggregated decision tree written to decision_tree_usage.png")
+
+# ------------------------
+# Run Aggregated Analysis
+# ------------------------
+if __name__ == "__main__":
+    rule_config = {
+        "metrics": {
+            "K": {"type": "custom", "dependencies": ["J"], "expression": "lambda J: abs(J)"},
+            "L": {"type": "custom", "dependencies": ["K"], "expression": "lambda K: K > 0"},
+            "M": {"type": "threshold", "dependencies": ["L"], "expression": [50000000, 200000000, 800000000]},
+            "O": {"type": "custom", "dependencies": ["N"], "expression": "lambda N: abs(N)"},
+            "O1": {"type": "custom", "dependencies": ["O"], "expression": "lambda O: O > 0"},
+            "P": {"type": "threshold", "dependencies": ["O1"], "expression": [800000000, 5000000000, 10000000000]},
+            "S": {"type": "custom", "dependencies": ["N", "Q", "R"], "expression": "lambda N, Q, R: abs((N - Q) - (R - Q)) / 2 if N != 'N/A' and Q != 'N/A' and R != 'N/A' else 'N/A'"},
+            "T": {"type": "threshold", "dependencies": ["S"], "expression": [500000000, 800000000, 5000000000]},
+            "U": {"type": "custom", "dependencies": ["Q"], "expression": "lambda Q: abs(Q) > 0"},
+            "V": {"type": "custom", "dependencies": ["T", "P", "S", "O"], "expression": "lambda T, P, S, O: S if lookup(T, P) == T else O"},
+            "W": {"type": "custom", "dependencies": ["T", "P", "S", "V"], "expression": "lambda T, P, S, V: T if V == S else P"},
+            "X": {"type": "custom", "dependencies": ["M", "W"], "expression": "lambda M, W: 'GMS' if lookup(M, W) == M else 'NII' if lookup(M, W) == W else 'N/A'"},
+            "AB": {"type": "custom", "dependencies": ["X", "M", "W"], "expression": "lambda X, M, W: M if X == 'GMS' else W if X == 'NII' else 'N/A'"}
+        }
+    }
+
+    aggregated_usage = defaultdict(int)
+    aggregated_result = {}
+    for i in range(10):
+        input_values = {
+            "J": random.randint(-300000000, 300000000),
+            "N": random.randint(500000000, 3000000000),
+            "Q": random.randint(200000000, 2000000000),
+            "R": random.randint(400000000, 2500000000)
+        }
+
+        evaluator = MetricEvaluator(rule_config["metrics"], input_values)
+        eval_order = get_eval_order(rule_config["metrics"])
+        results = evaluator.run_evaluation(eval_order)
+
+        for k, v in evaluator.rule_usage.items():
+            aggregated_usage[k] += v
+
+        for k, v in results.items():
+            aggregated_result[k] = v
+
+    generate_decision_tree(rule_config["metrics"], aggregated_result, aggregated_usage)
+
+
+
+
+
+
+
+import json
+from collections import defaultdict, deque
 
 class MetricEvaluator:
     def __init__(self, metrics, input_values):
@@ -1510,3 +1676,8 @@ if __name__ == "__main__":
     print(f"\n💾 Export Results (JSON):")
     print("-" * 40)
     print(evaluator.export_results("json"))
+
+
+
+
+
