@@ -850,3 +850,702 @@ public class RollbackController {
         return ResponseEntity.ok(response);
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+package com.example.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+public class EnversRollbackService {
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+    
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+
+    @Value("${rollback.schema:YOUR_SCHEMA}")
+    private String schemaName;
+
+    /**
+     * Rolls back all audited tables to the specified revision
+     * @param revX Target revision to roll back to
+     */
+    @Transactional(
+        isolation = Isolation.READ_COMMITTED,
+        propagation = Propagation.REQUIRES_NEW,
+        rollbackFor = Exception.class,
+        timeout = 3600 // 1 hour timeout
+    )
+    public void rollbackToRevision(int revX) {
+        rollbackToRevision(revX, true);
+    }
+    
+    /**
+     * Rolls back all audited tables to the specified revision
+     * @param revX Target revision to roll back to
+     * @param createBackup Whether to create backup tables before rollback
+     */
+    @Transactional(
+        isolation = Isolation.READ_COMMITTED,
+        propagation = Propagation.REQUIRES_NEW,
+        rollbackFor = Exception.class,
+        timeout = 3600 // 1 hour timeout
+    )
+    public void rollbackToRevision(int revX, boolean createBackup) {
+        rollbackToRevision(revX, createBackup, true);
+    }
+    
+    /**
+     * Rolls back all audited tables to the specified revision with optional REORG
+     * @param revX Target revision to roll back to
+     * @param createBackup Whether to create backup tables before rollback
+     * @param runReorg Whether to run REORG after rollback operations
+     */
+    @Transactional(
+        isolation = Isolation.READ_COMMITTED,
+        propagation = Propagation.REQUIRES_NEW,
+        rollbackFor = Exception.class,
+        timeout = 7200 // 2 hours timeout to account for REORG time
+    )
+    public void rollbackToRevision(int revX, boolean createBackup, boolean runReorg) {
+        String backupSuffix = null;
+        List<String> processedTables = new ArrayList<>();
+        
+        try {
+            System.out.println("Starting transactional rollback to revision " + revX);
+            
+            List<String> auditedTables = getAuditedTables();
+            Map<String, Set<String>> tableDependencies = getTableDependencies();
+            
+            // Get rollback order (child to parent to avoid FK violations)
+            List<String> rollbackOrder = getTopologicalOrder(auditedTables, tableDependencies);
+            
+            System.out.println("Rolling back tables in order: " + rollbackOrder);
+            
+            // Create backups if requested (within same transaction)
+            if (createBackup) {
+                backupSuffix = createBackupTablesTransactional(auditedTables);
+                System.out.println("Created backup tables with suffix: " + backupSuffix);
+            }
+            
+            // Perform rollback operations
+            for (String baseTable : rollbackOrder) {
+                rollbackSingleTable(baseTable, revX);
+                processedTables.add(baseTable);
+            }
+            
+            // Clean up future revision info
+            deleteFutureRevInfo(revX);
+            
+            // Run REORG if requested
+            if (runReorg) {
+                runReorganization(processedTables);
+            }
+            
+            System.out.println("Rollback to revision " + revX + " completed successfully");
+            if (createBackup) {
+                System.out.println("Backup tables available with suffix: " + backupSuffix);
+            }
+            if (runReorg) {
+                System.out.println("Table reorganization completed");
+            }
+            
+        } catch (Exception e) {
+            System.err.println("Rollback failed, transaction will be rolled back: " + e.getMessage());
+            if (createBackup && backupSuffix != null) {
+                System.err.println("Backup tables with suffix " + backupSuffix + " will be rolled back too");
+            }
+            throw new RuntimeException("Rollback operation failed", e);
+        }
+    }
+
+    /**
+     * Rollback operation using programmatic transaction management for fine-grained control
+     */
+    public void rollbackToRevisionWithProgrammaticTransaction(int revX, boolean createBackup) {
+        String backupSuffix = null;
+        
+        try {
+            backupSuffix = transactionTemplate.execute(status -> {
+                try {
+                    System.out.println("Starting programmatic transactional rollback to revision " + revX);
+                    
+                    List<String> auditedTables = getAuditedTables();
+                    Map<String, Set<String>> tableDependencies = getTableDependencies();
+                    List<String> rollbackOrder = getTopologicalOrder(auditedTables, tableDependencies);
+                    
+                    String backupSuffixLocal = null;
+                    
+                    // Create backups if requested
+                    if (createBackup) {
+                        backupSuffixLocal = createBackupTablesTransactional(auditedTables);
+                        System.out.println("Created backup tables with suffix: " + backupSuffixLocal);
+                    }
+                    
+                    // Perform rollback operations
+                    for (String baseTable : rollbackOrder) {
+                        rollbackSingleTable(baseTable, revX);
+                    }
+                    
+                    // Clean up future revision info
+                    deleteFutureRevInfo(revX);
+                    
+                    System.out.println("Rollback to revision " + revX + " completed successfully");
+                    return backupSuffixLocal;
+                    
+                } catch (Exception e) {
+                    System.err.println("Error in transaction, marking for rollback: " + e.getMessage());
+                    status.setRollbackOnly();
+                    throw new RuntimeException("Rollback operation failed", e);
+                }
+            });
+            
+            if (createBackup && backupSuffix != null) {
+                System.out.println("Transaction committed. Backup tables available with suffix: " + backupSuffix);
+            }
+            
+        } catch (Exception e) {
+            System.err.println("Programmatic transaction rollback failed: " + e.getMessage());
+            throw e;
+        }
+    }
+
+    /**
+     * Rollback a single table to the specified revision
+     */
+    private void rollbackSingleTable(String tableName, int revX) {
+        String audTable = tableName + "_AUD";
+        
+        System.out.println("Rolling back table: " + tableName);
+        
+        try {
+            List<String> dataColumns = getDataColumns(tableName);
+            
+            if (dataColumns.isEmpty()) {
+                System.out.println("No data columns found for table: " + tableName);
+                return;
+            }
+            
+            // Step 1: Reset REVEND to NULL for records that should be active
+            String updateRevEndSql = String.format(
+                "UPDATE %s.%s SET REVEND = NULL, REVEND_TSTMP = NULL WHERE REVEND > ?", 
+                schemaName, audTable);
+            int updatedRevEnd = jdbcTemplate.update(updateRevEndSql, revX);
+            System.out.println("Reset REVEND for " + updatedRevEnd + " records in " + audTable);
+            
+            // Step 2: Delete audit records beyond target revision
+            String deleteAudSql = String.format(
+                "DELETE FROM %s.%s WHERE REV > ?", 
+                schemaName, audTable);
+            int deletedAud = jdbcTemplate.update(deleteAudSql, revX);
+            System.out.println("Deleted " + deletedAud + " audit records from " + audTable);
+            
+            // Step 3: Delete main table records that were created after revX
+            String deleteMainSql = String.format("""
+                DELETE FROM %s.%s WHERE ID IN (
+                    SELECT DISTINCT ID FROM %s.%s 
+                    WHERE REV > ? AND REVTYPE = 0
+                )
+                """, schemaName, tableName, schemaName, audTable);
+            int deletedMain = jdbcTemplate.update(deleteMainSql, revX);
+            System.out.println("Deleted " + deletedMain + " main records from " + tableName);
+            
+            // Step 4: Restore main table state from audit
+            restoreMainTableState(tableName, dataColumns, revX);
+            
+        } catch (Exception e) {
+            System.err.println("Failed to rollback table " + tableName + ": " + e.getMessage());
+            throw e;
+        }
+    }
+
+    /**
+     * Restore main table state from audit table for the given revision
+     */
+    private void restoreMainTableState(String tableName, List<String> dataColumns, int revX) {
+        String audTable = tableName + "_AUD";
+        
+        // Clear main table first
+        String clearMainSql = String.format("DELETE FROM %s.%s", schemaName, tableName);
+        int cleared = jdbcTemplate.update(clearMainSql);
+        System.out.println("Cleared " + cleared + " records from main table " + tableName);
+        
+        // Build dynamic insert statement
+        String columnList = String.join(", ", dataColumns);
+        String selectColumns = dataColumns.stream()
+            .map(col -> "latest." + col)
+            .collect(Collectors.joining(", "));
+        
+        String restoreSql = String.format("""
+            INSERT INTO %s.%s (%s)
+            SELECT %s FROM (
+                SELECT %s,
+                       ROW_NUMBER() OVER (PARTITION BY ID ORDER BY REV DESC) AS rn
+                FROM %s.%s
+                WHERE REV <= ? AND REVTYPE <> 2
+            ) latest WHERE rn = 1
+            """, 
+            schemaName, tableName, columnList,
+            selectColumns, columnList,
+            schemaName, audTable);
+        
+        int restored = jdbcTemplate.update(restoreSql, revX);
+        System.out.println("Restored " + restored + " records to main table " + tableName);
+    }
+
+    /**
+     * Get all audited tables (tables that have corresponding _AUD tables)
+     */
+    private List<String> getAuditedTables() {
+        String sql = """
+            SELECT TABNAME FROM SYSCAT.TABLES 
+            WHERE TABSCHEMA = ? AND TABNAME LIKE '%_AUD'
+            ORDER BY TABNAME
+            """;
+        
+        return jdbcTemplate.queryForList(sql, String.class, schemaName.toUpperCase())
+            .stream()
+            .map(name -> name.replace("_AUD", ""))
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Get data columns for a table (excluding audit metadata columns)
+     */
+    private List<String> getDataColumns(String tableName) {
+        String sql = """
+            SELECT COLNAME FROM SYSCAT.COLUMNS 
+            WHERE TABSCHEMA = ? AND TABNAME = ? 
+            AND UPPER(COLNAME) NOT IN ('REV', 'REVEND', 'REVTYPE', 'REVEND_TSTMP')
+            ORDER BY COLNO
+            """;
+        
+        return jdbcTemplate.queryForList(sql, String.class, 
+            schemaName.toUpperCase(), (tableName + "_AUD").toUpperCase());
+    }
+
+    /**
+     * Get table dependencies from foreign key relationships
+     */
+    private Map<String, Set<String>> getTableDependencies() {
+        String sql = """
+            SELECT 
+                r.TABNAME AS CHILD_TABLE,
+                r.REFTABNAME AS PARENT_TABLE
+            FROM SYSCAT.REFERENCES r
+            WHERE r.TABSCHEMA = ? AND r.REFTABSCHEMA = ?
+            """;
+        
+        Map<String, Set<String>> dependencies = new HashMap<>();
+        
+        jdbcTemplate.query(sql, rs -> {
+            String child = rs.getString("CHILD_TABLE");
+            String parent = rs.getString("PARENT_TABLE");
+            
+            // Remove _AUD suffix if present
+            child = child.replace("_AUD", "");
+            parent = parent.replace("_AUD", "");
+            
+            dependencies.computeIfAbsent(child, k -> new HashSet<>()).add(parent);
+        }, schemaName.toUpperCase(), schemaName.toUpperCase());
+        
+        return dependencies;
+    }
+
+    /**
+     * Get topological order for rollback (child tables first to avoid FK violations)
+     */
+    private List<String> getTopologicalOrder(List<String> tables, Map<String, Set<String>> dependencies) {
+        Map<String, Integer> inDegree = new HashMap<>();
+        Set<String> allTables = new HashSet<>(tables);
+        
+        // Initialize in-degrees
+        for (String table : allTables) {
+            inDegree.put(table, 0);
+        }
+        
+        // Calculate in-degrees
+        for (Set<String> parents : dependencies.values()) {
+            for (String parent : parents) {
+                if (allTables.contains(parent)) {
+                    inDegree.put(parent, inDegree.get(parent) + 1);
+                }
+            }
+        }
+        
+        // Topological sort using Kahn's algorithm
+        Queue<String> queue = new LinkedList<>();
+        for (String table : allTables) {
+            if (inDegree.get(table) == 0) {
+                queue.add(table);
+            }
+        }
+        
+        List<String> result = new ArrayList<>();
+        while (!queue.isEmpty()) {
+            String current = queue.poll();
+            result.add(current);
+            
+            // Find children of current table
+            for (Map.Entry<String, Set<String>> entry : dependencies.entrySet()) {
+                if (entry.getValue().contains(current)) {
+                    String child = entry.getKey();
+                    inDegree.put(child, inDegree.get(child) - 1);
+                    if (inDegree.get(child) == 0) {
+                        queue.add(child);
+                    }
+                }
+            }
+        }
+        
+        // Check for cycles
+        if (result.size() != allTables.size()) {
+            throw new RuntimeException("Circular dependency detected in table relationships!");
+        }
+        
+        return result;
+    }
+
+    /**
+     * Delete revision info records beyond target revision
+     */
+    private void deleteFutureRevInfo(int revX) {
+        String sql = String.format("DELETE FROM %s.REVINFO WHERE REV > ?", schemaName);
+        int deleted = jdbcTemplate.update(sql, revX);
+        System.out.println("Deleted " + deleted + " revision info records beyond rev " + revX);
+    }
+
+    /**
+     * Create backup copies of all audit tables before rollback (transactional version)
+     * This method creates temporary tables within the same transaction
+     * @param auditedTables List of base table names (without _AUD suffix)
+     * @return The backup suffix used for the backup tables
+     */
+    private String createBackupTablesTransactional(List<String> auditedTables) {
+        String timestamp = java.time.LocalDateTime.now()
+            .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+        String backupSuffix = "_BACKUP_" + timestamp;
+        
+        System.out.println("Creating transactional backup tables with suffix: " + backupSuffix);
+        
+        for (String baseTable : auditedTables) {
+            String audTable = baseTable + "_AUD";
+            String backupTable = audTable + backupSuffix;
+            
+            try {
+                // Check if audit table exists
+                if (!tableExists(audTable)) {
+                    System.out.println("Audit table " + audTable + " does not exist, skipping backup");
+                    continue;
+                }
+                
+                // Drop backup table if it already exists (within transaction)
+                dropTableIfExistsTransactional(backupTable);
+                
+                // Create backup table structure and copy data
+                String createBackupSql = String.format("""
+                    CREATE TABLE %s.%s AS (
+                        SELECT * FROM %s.%s
+                    ) WITH DATA
+                    """, schemaName, backupTable, schemaName, audTable);
+                
+                jdbcTemplate.execute(createBackupSql);
+                
+                // Get row count for verification
+                String countSql = String.format("SELECT COUNT(*) FROM %s.%s", schemaName, backupTable);
+                Integer backupCount = jdbcTemplate.queryForObject(countSql, Integer.class);
+                
+                System.out.println("Created transactional backup table " + backupTable + " with " + backupCount + " records");
+                
+            } catch (Exception e) {
+                System.err.println("Failed to create transactional backup for " + audTable + ": " + e.getMessage());
+                throw new RuntimeException("Transactional backup creation failed for " + audTable, e);
+            }
+        }
+        
+        // Also backup REVINFO table
+        try {
+            String revInfoBackup = "REVINFO" + backupSuffix;
+            dropTableIfExistsTransactional(revInfoBackup);
+            
+            String createRevInfoBackupSql = String.format("""
+                CREATE TABLE %s.%s AS (
+                    SELECT * FROM %s.REVINFO
+                ) WITH DATA
+                """, schemaName, revInfoBackup, schemaName);
+            
+            jdbcTemplate.execute(createRevInfoBackupSql);
+            
+            Integer revInfoCount = jdbcTemplate.queryForObject(
+                String.format("SELECT COUNT(*) FROM %s.%s", schemaName, revInfoBackup), 
+                Integer.class);
+            
+            System.out.println("Created transactional backup table " + revInfoBackup + " with " + revInfoCount + " records");
+            
+        } catch (Exception e) {
+            System.err.println("Failed to create transactional REVINFO backup: " + e.getMessage());
+            throw new RuntimeException("Transactional REVINFO backup creation failed", e);
+        }
+        
+        return backupSuffix;
+    }
+    
+    /**
+     * Check if a table exists in the schema
+     */
+    private boolean tableExists(String tableName) {
+        String sql = """
+            SELECT COUNT(*) FROM SYSCAT.TABLES 
+            WHERE TABSCHEMA = ? AND TABNAME = ?
+            """;
+        
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, 
+            schemaName.toUpperCase(), tableName.toUpperCase());
+        
+        return count != null && count > 0;
+    }
+    
+    /**
+     * Run table reorganization for improved performance after significant data changes
+     * @param tablesToReorg List of tables to reorganize
+     */
+    private void runReorganization(List<String> tablesToReorg) {
+        System.out.println("Starting table reorganization for " + tablesToReorg.size() + " tables");
+        
+        for (String baseTable : tablesToReorg) {
+            try {
+                // Reorg main table
+                reorgTable(baseTable);
+                
+                // Reorg audit table
+                String audTable = baseTable + "_AUD";
+                if (tableExists(audTable)) {
+                    reorgTable(audTable);
+                }
+                
+            } catch (Exception e) {
+                System.err.println("Failed to reorganize table " + baseTable + ": " + e.getMessage());
+                // Continue with other tables - don't fail the entire operation
+            }
+        }
+        
+        // Also reorg REVINFO table
+        try {
+            reorgTable("REVINFO");
+        } catch (Exception e) {
+            System.err.println("Failed to reorganize REVINFO table: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Reorganize a single table
+     * @param tableName Name of the table to reorganize
+     */
+    private void reorgTable(String tableName) {
+        try {
+            System.out.println("Reorganizing table: " + tableName);
+            
+            // Check if table has significant fragmentation first
+            if (shouldReorganizeTable(tableName)) {
+                String reorgSql = String.format("CALL SYSPROC.ADMIN_CMD('REORG TABLE %s.%s')", 
+                    schemaName, tableName);
+                
+                long startTime = System.currentTimeMillis();
+                jdbcTemplate.execute(reorgSql);
+                long duration = System.currentTimeMillis() - startTime;
+                
+                System.out.println("Reorganized table " + tableName + " in " + duration + "ms");
+                
+                // Update table statistics after REORG
+                updateTableStatistics(tableName);
+                
+            } else {
+                System.out.println("Table " + tableName + " does not require reorganization");
+            }
+            
+        } catch (Exception e) {
+            System.err.println("REORG failed for table " + tableName + ": " + e.getMessage());
+            throw new RuntimeException("Table reorganization failed for " + tableName, e);
+        }
+    }
+    
+    /**
+     * Check if a table should be reorganized based on fragmentation
+     * @param tableName Name of the table to check
+     * @return true if table should be reorganized
+     */
+    private boolean shouldReorganizeTable(String tableName) {
+        try {
+            // Query to check table fragmentation and size
+            String statsQuery = """
+                SELECT 
+                    CARD as ROW_COUNT,
+                    NPAGES as PAGE_COUNT,
+                    FPAGES as FORMATTED_PAGES,
+                    CASE 
+                        WHEN NPAGES > 0 THEN ((FPAGES - NPAGES) * 100.0 / FPAGES)
+                        ELSE 0 
+                    END as FRAGMENTATION_PCT
+                FROM SYSCAT.TABLES 
+                WHERE TABSCHEMA = ? AND TABNAME = ?
+                """;
+            
+            Map<String, Object> stats = jdbcTemplate.queryForMap(statsQuery, 
+                schemaName.toUpperCase(), tableName.toUpperCase());
+            
+            Long rowCount = (Long) stats.get("ROW_COUNT");
+            Double fragmentationPct = (Double) stats.get("FRAGMENTATION_PCT");
+            
+            if (rowCount == null) rowCount = 0L;
+            if (fragmentationPct == null) fragmentationPct = 0.0;
+            
+            System.out.println("Table " + tableName + " - Rows: " + rowCount + 
+                ", Fragmentation: " + String.format("%.2f%%", fragmentationPct));
+            
+            // Reorganize if:
+            // - Table has more than 1000 rows AND fragmentation > 20%
+            // - OR table has more than 100,000 rows (always reorg large tables after major changes)
+            return (rowCount > 1000 && fragmentationPct > 20.0) || rowCount > 100000;
+            
+        } catch (Exception e) {
+            System.err.println("Failed to check fragmentation for " + tableName + ": " + e.getMessage());
+            // Default to reorganizing if we can't check stats
+            return true;
+        }
+    }
+    
+    /**
+     * Update table statistics after reorganization
+     * @param tableName Name of the table to update statistics for
+     */
+    private void updateTableStatistics(String tableName) {
+        try {
+            System.out.println("Updating statistics for table: " + tableName);
+            
+            String updateStatsSql = String.format(
+                "CALL SYSPROC.ADMIN_CMD('RUNSTATS ON TABLE %s.%s WITH DISTRIBUTION AND DETAILED INDEXES ALL')", 
+                schemaName, tableName);
+            
+            jdbcTemplate.execute(updateStatsSql);
+            
+            System.out.println("Updated statistics for table: " + tableName);
+            
+        } catch (Exception e) {
+            System.err.println("Failed to update statistics for " + tableName + ": " + e.getMessage());
+            // Don't throw exception - statistics update is not critical
+        }
+    }
+    
+    /**
+     * Standalone method to reorganize specific tables
+     * @param tableNames List of table names to reorganize
+     */
+    @Transactional(
+        isolation = Isolation.READ_COMMITTED,
+        propagation = Propagation.REQUIRES_NEW,
+        rollbackFor = Exception.class,
+        timeout = 3600
+    )
+    public void reorganizeTables(List<String> tableNames) {
+        System.out.println("Starting standalone table reorganization");
+        
+        try {
+            runReorganization(tableNames);
+            System.out.println("Standalone table reorganization completed successfully");
+            
+        } catch (Exception e) {
+            System.err.println("Standalone table reorganization failed: " + e.getMessage());
+            throw new RuntimeException("Table reorganization failed", e);
+        }
+    }
+    
+    /**
+     * Reorganize all audited tables in the schema
+     */
+    @Transactional(
+        isolation = Isolation.READ_COMMITTED,
+        propagation = Propagation.REQUIRES_NEW,
+        rollbackFor = Exception.class,
+        timeout = 7200 // 2 hours for full schema reorg
+    )
+    public void reorganizeAllAuditedTables() {
+        try {
+            List<String> auditedTables = getAuditedTables();
+            System.out.println("Starting reorganization of all audited tables: " + auditedTables);
+            
+            runReorganization(auditedTables);
+            
+            System.out.println("Reorganization of all audited tables completed successfully");
+            
+        } catch (Exception e) {
+            System.err.println("Full schema reorganization failed: " + e.getMessage());
+            throw new RuntimeException("Full schema reorganization failed", e);
+        }
+    }
+    private void dropTableIfExistsTransactional(String tableName) {
+        if (tableExists(tableName)) {
+            String dropSql = String.format("DROP TABLE %s.%s", schemaName, tableName);
+            jdbcTemplate.execute(dropSql);
+            System.out.println("Dropped existing table within transaction: " + tableName);
+        }
+    }
+    public void dryRunRollback(int revX) {
+        System.out.println("=== DRY RUN: Rollback to revision " + revX + " ===");
+        
+        List<String> auditedTables = getAuditedTables();
+        Map<String, Set<String>> dependencies = getTableDependencies();
+        List<String> rollbackOrder = getTopologicalOrder(auditedTables, dependencies);
+        
+        System.out.println("Tables to be processed in order: " + rollbackOrder);
+        System.out.println("Dependencies found: " + dependencies);
+        
+        for (String table : rollbackOrder) {
+            String audTable = table + "_AUD";
+            
+            // Count records that would be affected
+            String countAudSql = String.format(
+                "SELECT COUNT(*) FROM %s.%s WHERE REV > ?", schemaName, audTable);
+            Integer audCount = jdbcTemplate.queryForObject(countAudSql, Integer.class, revX);
+            
+            String countMainSql = String.format("""
+                SELECT COUNT(*) FROM %s.%s WHERE ID IN (
+                    SELECT DISTINCT ID FROM %s.%s WHERE REV > ? AND REVTYPE = 0
+                )
+                """, schemaName, table, schemaName, audTable);
+            Integer mainCount = jdbcTemplate.queryForObject(countMainSql, Integer.class, revX);
+            
+            System.out.println(table + ": " + audCount + " audit records, " + mainCount + " main records would be affected");
+        }
+        
+        System.out.println("=== End Dry Run ===");
+    }
+}
