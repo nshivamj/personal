@@ -1,120 +1,233 @@
-Build a React application with the following screens for my Survey System.
-Use React 18, TypeScript, Zustand for state management, and fetch/Axios for API calls.
-Each module should be self-contained (components + Zustand slice + API integration).
+Survey Application — Reference Specification
+🏗️ Architecture
 
-APIs already defined
+Backend: Spring Boot (Java), MongoDB
 
-GET /api/surveys
+Frontend: React 18 + TypeScript + Zustand (state), React Router
 
-GET /api/surveys/{id}
+Infra: Already set up by you (services + Mongo)
 
-GET /api/surveys/{id}/responses
+📂 MongoDB Collections
+1. surveyTemplates
+{
+  "_id": "tpl1-v2",
+  "templateId": "tpl1",
+  "version": 2,
+  "name": "Audit Feedback Template",
+  "questions": [
+    {
+      "questionId": "q1",
+      "text": "Did you review the project plan?",
+      "type": "RADIO",
+      "options": [
+        { "id": "1", "text": "Yes" },
+        { "id": "2", "text": "No" }
+      ]
+    },
+    {
+      "questionId": "q2",
+      "text": "Any blockers?",
+      "type": "TEXT"
+    }
+  ],
+  "isActive": true,
+  "createdAt": "2025-10-08T09:00:00Z"
+}
 
-GET /api/surveys/{id}/summary
+2. surveys
+{
+  "_id": "6501a1",
+  "surveyId": "6501a1",
+  "code": "SURV-2025-001",
+  "name": "Q4 Audit Survey",
+  "type": "PROJECT",
+  "projectCode": "PRJ1001",
+  "createdBy": "sjain",
+  "templateId": "tpl1",
+  "templateVersion": 2,
+  "status": "OPEN",
+  "deadline": "2025-10-15T00:00:00Z",
+  "assignments": [
+    { "assignee": "user200", "status": "SUBMITTED", "emailStatus": "SENT" },
+    { "assignee": "user201", "status": "DRAFT", "emailStatus": "SENT" },
+    { "assignee": "user202", "status": "PENDING", "emailStatus": "FAILED" }
+  ],
+  "createdAt": "2025-10-08T09:00:00Z",
+  "updatedAt": "2025-10-11T12:00:00Z"
+}
 
-POST /api/surveys
+3. surveyResponses
+{
+  "_id": "resp1",
+  "surveyId": "6501a1",
+  "assignee": "user200",
+  "status": "SUBMITTED",
+  "answers": [
+    { "questionId": "q1", "answerOptionIds": ["1"], "answerText": null },
+    { "questionId": "q2", "answerOptionIds": [], "answerText": "We had blockers" }
+  ],
+  "submittedAt": "2025-10-08T12:00:00Z"
+}
 
-POST /api/surveys/{id}/responses
+🌐 APIs
+Template APIs
 
-Admin Screens
-1. Admin Dashboard (/admin/dashboard)
+GET /api/templates → list templates (latest versions, active flag)
 
-Table listing all surveys
+Survey APIs
 
-Columns: Survey Code, Name, Project Code, Owner, Status, Deadline, Progress (%)
+POST /api/surveys → create survey from template + assignees + deadline
 
-Progress should be a visual progress bar (summary.progress).
+GET /api/surveys → list surveys (filter: owner/admin)
 
-Row click → navigates to survey detail page (/admin/surveys/{id}).
+GET /api/surveys/{id} → get survey detail (metadata + assignments with status)
 
-Filters: status (OPEN, CLOSED), projectCode, owner.
+Response APIs
 
-Uses GET /api/surveys.
+POST /api/surveys/{id}/responses → save/submit answers for assignee
 
-State managed in Zustand slice: surveysSlice.
+GET /api/surveys/{id}/responses → raw responses (per user, for admin only)
 
-2. Admin Survey Detail (/admin/surveys/:id)
+Summary APIs
 
-Show survey metadata: code, name, projectCode, template, deadline, status.
+GET /api/surveys/{id}/summary → aggregated analytics per question
 
-Show assignments table: Assignee, Status (Pending/Draft/Submitted), Email Status.
+🎨 Frontend Screens
+👤 User (Assignee)
 
-Show summary block: assignedCount, completedCount, progress bar.
+Survey Page
 
-Tabs:
+Fetch survey metadata & assigned questions
 
-Overview (metadata + assignments) → uses GET /api/surveys/{id}.
+Render dynamic question form (SurveyForm)
 
-Responses → fetches all per-user answers → uses GET /api/surveys/{id}/responses.
+Support Draft Save and Final Submit
 
-Aggregated Summary → shows per-question counts and free text → uses GET /api/surveys/{id}/summary.
+After submit → answers read-only
 
-Zustand slice: surveyDetailSlice.
+👑 Owner (Project Owner / Admin-lite)
 
-User Screens
-3. User Survey Page (/surveys/:id)
+Survey Dashboard (Owner)
 
-Fetch survey by ID → GET /api/surveys/{id}/assigned (or /surveys/{id} with filtering by logged-in user).
+Header summary:
 
-Show survey metadata (name, code, projectCode, deadline).
+Total Surveys
 
-Render dynamic list of questions (generic component):
+Active Surveys
 
-RADIO → radio button group
+Avg Completion %
 
-CHECKBOX → multiple select checkboxes
+Actions: Create Survey, Grid/List toggle
 
-TEXT → textarea input
+Survey grid with columns: Code, Name, Type, Project, Status, Deadline, Progress
 
-Local draft auto-save → POST /api/surveys/{id}/responses with status=DRAFT.
+Survey Detail (Owner)
 
-Final submit → POST /api/surveys/{id}/responses with status=SUBMITTED.
+Survey metadata
 
-After submit → answers shown in read-only mode.
+Assignments table (assignee + status + email status)
 
-Component: <SurveyForm questions={questions} mode="edit|view" />.
+Progress bar (assigned vs completed)
 
-Zustand slice: userSurveySlice.
+Survey Create Page
 
-Project Owner Screens
-4. Survey Create Page (/surveys/create)
+Select template, assignees, deadline, project code
 
-Form fields: Name, Type (PROJECT/GENERAL), ProjectCode, Template (dropdown from GET /api/templates), Assignees (multi-select), Deadline.
+Submit → create new survey
 
-On submit → call POST /api/surveys.
+🛠️ Admin (Full View)
 
-Show confirmation and navigate back to dashboard.
+Admin Dashboard (all surveys, not just owned ones) → same as Owner but wider scope
 
-Zustand slice: createSurveySlice.
+Admin Survey Detail
 
-State Management Rules
+Overview: metadata + assignments + progress
 
-Each slice should have:
+Responses tab: all raw responses per user
 
-loading, error, data.
+Summary tab: aggregated analytics
 
-Async actions: fetchAllSurveys(), fetchSurveyDetail(id), fetchSurveyResponses(id), fetchSurveySummary(id), createSurvey(payload), submitResponse(id, payload).
 
-Always store responses in normalized form in Zustand store.
 
-Use React Router for navigation.
 
-Keep UI components dumb, Zustand slices handle API + state.
+Build a Survey Dashboard (Owner) page (/owner/dashboard) in React 18 + TypeScript.
+Use Zustand for state management.
+API integration should use fetch or Axios with async actions inside the Zustand slice.
 
-Each screen imports its own slice.
+Layout
+
+Header Section (first half of page): "Survey Management"
+
+Subtitle: "Create and manage audit surveys for your projects"
+
+Quick Stats (cards / tiles):
+
+Total Surveys = count of surveys returned
+
+Active Surveys = count of surveys with status=OPEN
+
+Avg Completion = average completion across all surveys =
+(Σ (completedCount / assignedCount)) / totalSurveys
+
+Buttons:
+
+Create Survey (navigates to /owner/surveys/create)
+
+Grid View / List View toggle (default Grid)
+
+Survey Grid/Table Section (second half of page):
+
+Table columns:
+
+Survey Code
+
+Name
+
+Type (PROJECT / GENERAL)
+
+Project Code
+
+Status (OPEN / CLOSED)
+
+Deadline
+
+Progress (visual bar + fraction like 7/10)
+
+Row click → navigates to Survey Detail (/owner/surveys/:id).
+
+Filters: status, projectCode.
+
+Empty state: “No surveys created yet. Click ‘Create Survey’ to start.”
+
+Loading + error states.
+
+State Management (Zustand slice: surveysSlice)
+
+State:
+
+surveys: Survey[]
+
+loading: boolean
+
+error: string | null
+
+stats: { totalSurveys: number; activeSurveys: number; avgCompletion: number }
+
+Actions:
+
+fetchSurveys(filters?) → calls GET /api/surveys and computes stats from assignments[].
+
 
 Deliverables
 
-A SurveyDashbaord.tsx for Admin Dashboard
+SurveyDashboardOwnerPage.tsx → page with:
 
-A SurveyDetailPage.tsx for Admin Detail (with Overview, Responses, Summary tabs)
+Header section with summary + actions
 
-A reusable SurveyForm.tsx component for rendering questions dynamically (radio/checkbox/text)
+Survey grid/table
 
-A UserSurveyPage.tsx that uses SurveyForm
+useSurveysSlice.ts → Zustand slice with async actions + computed stats
 
-A CreateSurveyPage.tsx for survey creation
+Utility function calculateStats(surveys: Survey[]): SurveyStats
 
-Zustand slices for each module with typed actions and selectors
-
-Make sure to generate code with clean separation (components, slices, api/ folder).
+Components: StatsCard.tsx, SurveyTable.tsx
