@@ -1,28 +1,32 @@
-"assignments": [
-  {
-    "assignee": "user200",
-    "status": "SUBMITTED",         // PENDING | SENT | FAILED | DRAFT | SUBMITTED
-    "emailStatus": "SENT",         // SENT | FAILED (optional, if you track delivery)
-    "assignedAt": "2025-10-08T09:00:00Z",
-    "submittedAt": "2025-10-08T12:00:00Z",
-    "lastReminderAt": "2025-10-10T10:00:00Z"
-  },
-  {
-    "assignee": "user201",
-    "status": "DRAFT",
-    "emailStatus": "SENT",
-    "assignedAt": "2025-10-08T09:00:00Z",
-    "submittedAt": null,
-    "lastReminderAt": null
-  },
-  {
-    "assignee": "user202",
-    "status": "PENDING",
-    "emailStatus": "FAILED",
-    "assignedAt": "2025-10-08T09:00:00Z",
-    "submittedAt": null,
-    "lastReminderAt": null
-  }
-]
-
-
+{
+  "_id": "6501a1",
+  "surveyId": "6501a1",
+  "code": "SURV-2025-001",
+  "name": "Q4 Audit Survey",
+  "type": "PROJECT",
+  "projectCode": "PRJ1001",
+  "createdBy": "sjain",
+  "templateId": "tpl1",
+  "templateVersion": 2,
+  "status": "OPEN",
+  "deadline": "2025-10-15T00:00:00Z",
+  "assignments": [
+    {
+      "assignee": "user200",
+      "status": "SUBMITTED",
+      "emailStatus": "SENT"
+    },
+    {
+      "assignee": "user201",
+      "status": "DRAFT",
+      "emailStatus": "SENT"
+    },
+    {
+      "assignee": "user202",
+      "status": "PENDING",
+      "emailStatus": "FAILED"
+    }
+  ],
+  "createdAt": "2025-10-08T09:00:00Z",
+  "updatedAt": "2025-10-11T12:00:00Z"
+}
