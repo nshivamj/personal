@@ -1,45 +1,45 @@
-I am building an Audit Survey application in Spring Boot using MongoDB.  
-I need to implement REST APIs for managing **survey templates** with versioning.  
-Each template version is a separate document in the `surveyTemplates` collection.  
+📂 Final surveys Schema (MVP)
+{
+  "_id": "6501a1",
+  "type": "PROJECT",                  // PROJECT | GENERAL (future)
+  "projectCode": "PRJ1001",           // reference project
+  "name": "Q4 Audit Survey",          // survey display name
+  "code": "SURV-2025-001",            // unique code/id for survey
+  "createdBy": "sjain",               // creator kerberos
+  "templateId": "tpl1",
+  "templateVersion": 2,               // frozen at creation
+  "status": "OPEN",                   // OPEN | CLOSED
+  "deadline": "2025-10-15T00:00:00Z",
+  "assignments": [
+    { "kerberos": "user200" },
+    { "kerberos": "user201" },
+    { "kerberos": "user202" }
+  ],
+  "createdAt": "2025-10-08T09:00:00Z"
+}
 
-## Collection Schema (MongoDB)
-
-surveyTemplates:
-- _id: string (format: {templateId}_v{version})
-- templateId: string (logical template identifier, e.g. "tpl1")
-- version: int (incremental version number)
-- status: string (enum: DRAFT | ACTIVE | INACTIVE)
-- name: string
-- description: string
-- questions: array of {
-    id: string,
-    text: string,
-    type: string (RADIO | TEXT),
-    options: [{ id: string, text: string }]
-  }
-- createdAt: datetime
-
-## Required APIs
-
-1. `GET /api/templates`
-   - Return all templates (only ACTIVE by default, but allow ?status=ALL query param).
-   - Response should group by templateId, returning latest active version info.
-
-4. `POST /api/templates`
-   - Create a new template.
-   - Request body includes name, description, questions.
-   - Default status = DRAFT.
-   - Auto-increment version number.
-
-
-## Requirements
-
-- Use Spring Boot (Java) with Spring Data MongoDB.
-- Create an entity/model class `SurveyTemplate`.
-- Create a repository interface extending `MongoRepository`.
-- Create a service layer for business logic.
-- Create a controller exposing the REST endpoints.
-- Responses should use DTOs (no direct entity exposure).
-- Use standard Spring Boot exception handling (404 if template not found, etc).
-
-Please generate code for the Controller, Service, Repository, and Model classes.
+📂 Final surveyResponses Schema (MVP)
+{
+  "_id": "resp1",
+  "surveyId": "6501a1",               
+  "kerberos": "user200",              // responder kerberos
+  "status": "SUBMITTED",              // DRAFT | SUBMITTED
+  "answers": [
+    {
+      "questionId": "q1",
+      "answerOptionIds": ["1"],       // radio → single element array
+      "answerText": null
+    },
+    {
+      "questionId": "q2",
+      "answerOptionIds": [],          // text answer
+      "answerText": "We had blockers from dependency team"
+    },
+    {
+      "questionId": "q3",
+      "answerOptionIds": ["1", "3"],  // multi-select
+      "answerText": null
+    }
+  ],
+  "submittedAt": "2025-10-08T12:00:00Z"
+}
