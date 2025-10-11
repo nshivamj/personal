@@ -1,188 +1,28 @@
-I am building an Audit Survey application in Spring Boot using MongoDB.
-Please generate model classes (@Document), repositories, services, and controllers
-for the following collections and APIs.
-
----
-
-## Mongo Collections
-
-### templates
-- _id: string (templateId)
-- name: string
-- category: string
-- version: int
-- isActive: boolean
-- questions: [
-    { questionId: string, text: string, type: string, options: [{ id: string, text: string }] }
-  ]
-- createdAt: Date
-
-### surveys
-- _id: string (surveyId)
-- type: string (PROJECT | GENERAL)
-- projectCode: string (nullable if GENERAL)
-- name: string
-- code: string
-- createdBy: string   // kerberos or username
-- templateId: string
-- templateVersion: int
-- status: string (OPEN | CLOSED)
-- deadline: Date
-- assignments: [ { assignee: string } ]
-- createdAt: Date
-
-### surveyResponses
-- _id: string (responseId)
-- surveyId: string
-- assignee: string
-- status: string (DRAFT | SUBMITTED)
-- answers: [
-    { questionId: string, answerOptionIds: [string], answerText: string }
-  ]
-- submittedAt: Date
-
-Indexes:
-- surveyResponses: unique (surveyId, assignee)
-
----
-
-## APIs To Implement
-
-### 1. GET /api/templates
-- List all templates
-- Response:
-[
-  { "templateId": "tpl1", "name": "Audit Template", "category": "Audit", "version": 2, "isActive": true }
-]
-
----
-
-### 2. POST /api/surveys
-- Create a new survey from template
-- Request:
-{
-  "type": "PROJECT",
-  "projectCode": "PRJ1001",
-  "name": "Q4 Audit Survey",
-  "code": "SURV-2025-001",
-  "createdBy": "sjain",
-  "templateId": "tpl1",
-  "templateVersion": 2,
-  "deadline": "2025-10-15T00:00:00Z",
-  "assignments": [{ "assignee": "user200" }, { "assignee": "user201" }]
-}
-- Response:
-{
-  "surveyId": "6501a1",
-  "status": "OPEN",
-  "createdAt": "2025-10-08T09:00:00Z"
-}
-
----
-
-### 3. GET /api/surveys?createdBy={id}
-- List surveys created by a given user
-- Response:
-[
-  { "surveyId": "6501a1", "name": "Q4 Audit Survey", "status": "OPEN", "deadline": "2025-10-15T00:00:00Z" }
-]
-
----
-
-### 4. GET /api/surveys/{surveyId}
-- Get survey details (metadata + assignments)
-- Response:
-{
-  "surveyId": "6501a1",
-  "name": "Q4 Audit Survey",
-  "code": "SURV-2025-001",
-  "type": "PROJECT",
-  "projectCode": "PRJ1001",
-  "status": "OPEN",
-  "deadline": "2025-10-15T00:00:00Z",
-  "assignments": [{ "assignee": "user200" }, { "assignee": "user201" }]
-}
-
----
-
-### 5. GET /api/surveys/{surveyId}/assigned?assignee={id}
-- Returns survey metadata, template questions, and prefilled draft answers (if exist)
-- Response:
-{
-  "surveyId": "6501a1",
-  "name": "Q4 Audit Survey",
-  "deadline": "2025-10-15T00:00:00Z",
-  "questions": [
-    { "questionId": "q1", "text": "Did you review X?", "type": "RADIO", "options": [...] },
-    { "questionId": "q2", "text": "Any blockers?", "type": "TEXT" }
-  ],
-  "answers": [
-    { "questionId": "q1", "answerOptionIds": ["1"], "answerText": null },
-    { "questionId": "q2", "answerOptionIds": [], "answerText": "Still drafting..." }
-  ]
-}
-
----
-
-### 6. POST /api/surveys/{surveyId}/responses
-- Save or submit a response for an assignee
-- Request:
-{
-  "assignee": "user200",
-  "status": "DRAFT",
-  "answers": [
-    { "questionId": "q1", "answerOptionIds": ["1"], "answerText": null },
-    { "questionId": "q2", "answerOptionIds": [], "answerText": "We had blockers" }
-  ]
-}
-- Response:
-{ "responseId": "resp1", "status": "DRAFT", "savedAt": "2025-10-08T12:00:00Z" }
-
----
-
-### 7. GET /api/surveys/{surveyId}/responses?assignee={id}
-- Returns a single assignee’s submitted response (read-only)
-- Response:
-{
-  "surveyId": "6501a1",
-  "assignee": "user200",
-  "status": "SUBMITTED",
-  "submittedAt": "2025-10-08T12:30:00Z",
-  "answers": [...]
-}
-
----
-
-### 8. GET /api/surveys/{surveyId}/responses
-- Admin-only: fetch all responses grouped by assignee
-- Response:
-[
+"assignments": [
   {
     "assignee": "user200",
-    "status": "SUBMITTED",
-    "submittedAt": "2025-10-08T12:30:00Z",
-    "answers": [...]
+    "status": "SUBMITTED",         // PENDING | SENT | FAILED | DRAFT | SUBMITTED
+    "emailStatus": "SENT",         // SENT | FAILED (optional, if you track delivery)
+    "assignedAt": "2025-10-08T09:00:00Z",
+    "submittedAt": "2025-10-08T12:00:00Z",
+    "lastReminderAt": "2025-10-10T10:00:00Z"
   },
   {
     "assignee": "user201",
     "status": "DRAFT",
-    "answers": [...]
+    "emailStatus": "SENT",
+    "assignedAt": "2025-10-08T09:00:00Z",
+    "submittedAt": null,
+    "lastReminderAt": null
+  },
+  {
+    "assignee": "user202",
+    "status": "PENDING",
+    "emailStatus": "FAILED",
+    "assignedAt": "2025-10-08T09:00:00Z",
+    "submittedAt": null,
+    "lastReminderAt": null
   }
 ]
 
----
 
-## Business Rules
-- Enforce unique (surveyId, assignee) in `surveyResponses`.
-- Reject submissions if survey.status = CLOSED or deadline < now.
-- `GET assigned` should merge template questions with existing draft answers.
-- Auto-save is handled by calling `POST /responses` with status=DRAFT.
-- Only admin can call `GET /api/surveys/{surveyId}/responses`.
-
----
-
-## Implementation Notes
-- Use Spring Data MongoDB (`@Document`, `MongoRepository`).
-- Return responses as JSON DTOs (don’t expose DB models directly).
-- Use services for business logic, controllers for APIs.
-- Validate inputs and handle 400/404 errors properly.
