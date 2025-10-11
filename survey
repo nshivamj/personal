@@ -1,8 +1,6 @@
 I am building an Audit Survey application in Spring Boot using MongoDB.
-I already have collections defined: `surevye_templates`, `surveys1`, `survey_responses`.
-
-Below is the schema and the list of APIs I need. Please generate
-controller, service, and repository classes for each.
+Please generate model classes (@Document), repositories, services, and controllers
+for the following collections and APIs.
 
 ---
 
@@ -25,7 +23,7 @@ controller, service, and repository classes for each.
 - projectCode: string (nullable if GENERAL)
 - name: string
 - code: string
-- createdBy: string
+- createdBy: string   // kerberos or username
 - templateId: string
 - templateVersion: int
 - status: string (OPEN | CLOSED)
@@ -48,54 +46,143 @@ Indexes:
 
 ---
 
-## APIs to Implement
+## APIs To Implement
 
-### Templates  --> already completed
-1. GET /api/templates  
-   → List all templates (return id, name, version, isActive, questions)
-
----
-
-### Surveys
-2. POST /api/surveys  
-   → Create a new survey using templateId + version + assignments.  
-   Request: { type, projectCode?, name, code, createdBy, templateId, templateVersion, deadline, assignments: [assignee] }  
-   Response: created survey JSON.
-
-3. GET /api/surveys
-   → List surveys (admin/owner view).
-
-4. GET /api/surveys/{surveyId}  
-   → Get survey details (metadata + assignments+ questions).
-
-5. GET /api/surveys/{surveyId}/assigned
-   → Get survey details + questions for the logged-in assignee.  
-   Should also return already saved responses (if status = DRAFT).
+### 1. GET /api/templates
+- List all templates
+- Response:
+[
+  { "templateId": "tpl1", "name": "Audit Template", "category": "Audit", "version": 2, "isActive": true }
+]
 
 ---
 
-### Responses
-6. POST /api/surveys/{surveyId}/responses  
-   → Save responses for an assignee (atomic save all answers).  
-   Request: { assignee, status, answers }  
-   - If status = DRAFT → save but no submittedAt.  
-   - If status = SUBMITTED → save and set submittedAt.  
-   Response: saved response JSON.
-
-7. GET /api/surveys/{surveyId}/responses?assignee={id}  
-   → Get my submitted response (read-only).
-
-8. GET /api/surveys/{surveyId}/responses (admin only)  
-   → Get all responses for a survey, grouped by assignee.  
+### 2. POST /api/surveys
+- Create a new survey from template
+- Request:
+{
+  "type": "PROJECT",
+  "projectCode": "PRJ1001",
+  "name": "Q4 Audit Survey",
+  "code": "SURV-2025-001",
+  "createdBy": "sjain",
+  "templateId": "tpl1",
+  "templateVersion": 2,
+  "deadline": "2025-10-15T00:00:00Z",
+  "assignments": [{ "assignee": "user200" }, { "assignee": "user201" }]
+}
+- Response:
+{
+  "surveyId": "6501a1",
+  "status": "OPEN",
+  "createdAt": "2025-10-08T09:00:00Z"
+}
 
 ---
 
-## Requirements
+### 3. GET /api/surveys?createdBy={id}
+- List surveys created by a given user
+- Response:
+[
+  { "surveyId": "6501a1", "name": "Q4 Audit Survey", "status": "OPEN", "deadline": "2025-10-15T00:00:00Z" }
+]
 
-- Use Spring Data MongoDB (`@Document` for entities, `MongoRepository` for repos).  
-- Enforce unique index on (surveyId, assignee) in `surveyResponses`.  
-- Use services for business logic, controllers for endpoints.  
-- Validate inputs and return appropriate error codes (404 for missing survey, 400 for bad request).  
-- Ensure that a survey cannot be responded to if status = CLOSED or deadline < now.  
-- For GET assigned API, merge survey.questions + surveyResponses.answers (if exists, prefill answers).  
-- Return JSON response bodies ready to be consumed by React frontend.  
+---
+
+### 4. GET /api/surveys/{surveyId}
+- Get survey details (metadata + assignments)
+- Response:
+{
+  "surveyId": "6501a1",
+  "name": "Q4 Audit Survey",
+  "code": "SURV-2025-001",
+  "type": "PROJECT",
+  "projectCode": "PRJ1001",
+  "status": "OPEN",
+  "deadline": "2025-10-15T00:00:00Z",
+  "assignments": [{ "assignee": "user200" }, { "assignee": "user201" }]
+}
+
+---
+
+### 5. GET /api/surveys/{surveyId}/assigned?assignee={id}
+- Returns survey metadata, template questions, and prefilled draft answers (if exist)
+- Response:
+{
+  "surveyId": "6501a1",
+  "name": "Q4 Audit Survey",
+  "deadline": "2025-10-15T00:00:00Z",
+  "questions": [
+    { "questionId": "q1", "text": "Did you review X?", "type": "RADIO", "options": [...] },
+    { "questionId": "q2", "text": "Any blockers?", "type": "TEXT" }
+  ],
+  "answers": [
+    { "questionId": "q1", "answerOptionIds": ["1"], "answerText": null },
+    { "questionId": "q2", "answerOptionIds": [], "answerText": "Still drafting..." }
+  ]
+}
+
+---
+
+### 6. POST /api/surveys/{surveyId}/responses
+- Save or submit a response for an assignee
+- Request:
+{
+  "assignee": "user200",
+  "status": "DRAFT",
+  "answers": [
+    { "questionId": "q1", "answerOptionIds": ["1"], "answerText": null },
+    { "questionId": "q2", "answerOptionIds": [], "answerText": "We had blockers" }
+  ]
+}
+- Response:
+{ "responseId": "resp1", "status": "DRAFT", "savedAt": "2025-10-08T12:00:00Z" }
+
+---
+
+### 7. GET /api/surveys/{surveyId}/responses?assignee={id}
+- Returns a single assignee’s submitted response (read-only)
+- Response:
+{
+  "surveyId": "6501a1",
+  "assignee": "user200",
+  "status": "SUBMITTED",
+  "submittedAt": "2025-10-08T12:30:00Z",
+  "answers": [...]
+}
+
+---
+
+### 8. GET /api/surveys/{surveyId}/responses
+- Admin-only: fetch all responses grouped by assignee
+- Response:
+[
+  {
+    "assignee": "user200",
+    "status": "SUBMITTED",
+    "submittedAt": "2025-10-08T12:30:00Z",
+    "answers": [...]
+  },
+  {
+    "assignee": "user201",
+    "status": "DRAFT",
+    "answers": [...]
+  }
+]
+
+---
+
+## Business Rules
+- Enforce unique (surveyId, assignee) in `surveyResponses`.
+- Reject submissions if survey.status = CLOSED or deadline < now.
+- `GET assigned` should merge template questions with existing draft answers.
+- Auto-save is handled by calling `POST /responses` with status=DRAFT.
+- Only admin can call `GET /api/surveys/{surveyId}/responses`.
+
+---
+
+## Implementation Notes
+- Use Spring Data MongoDB (`@Document`, `MongoRepository`).
+- Return responses as JSON DTOs (don’t expose DB models directly).
+- Use services for business logic, controllers for APIs.
+- Validate inputs and handle 400/404 errors properly.
