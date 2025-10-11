@@ -1,32 +1,120 @@
-{
-  "_id": "6501a1",
-  "surveyId": "6501a1",
-  "code": "SURV-2025-001",
-  "name": "Q4 Audit Survey",
-  "type": "PROJECT",
-  "projectCode": "PRJ1001",
-  "createdBy": "sjain",
-  "templateId": "tpl1",
-  "templateVersion": 2,
-  "status": "OPEN",
-  "deadline": "2025-10-15T00:00:00Z",
-  "assignments": [
-    {
-      "assignee": "user200",
-      "status": "SUBMITTED",
-      "emailStatus": "SENT"
-    },
-    {
-      "assignee": "user201",
-      "status": "DRAFT",
-      "emailStatus": "SENT"
-    },
-    {
-      "assignee": "user202",
-      "status": "PENDING",
-      "emailStatus": "FAILED"
-    }
-  ],
-  "createdAt": "2025-10-08T09:00:00Z",
-  "updatedAt": "2025-10-11T12:00:00Z"
-}
+Build a React application with the following screens for my Survey System.
+Use React 18, TypeScript, Zustand for state management, and fetch/Axios for API calls.
+Each module should be self-contained (components + Zustand slice + API integration).
+
+APIs already defined
+
+GET /api/surveys
+
+GET /api/surveys/{id}
+
+GET /api/surveys/{id}/responses
+
+GET /api/surveys/{id}/summary
+
+POST /api/surveys
+
+POST /api/surveys/{id}/responses
+
+Admin Screens
+1. Admin Dashboard (/admin/dashboard)
+
+Table listing all surveys
+
+Columns: Survey Code, Name, Project Code, Owner, Status, Deadline, Progress (%)
+
+Progress should be a visual progress bar (summary.progress).
+
+Row click → navigates to survey detail page (/admin/surveys/{id}).
+
+Filters: status (OPEN, CLOSED), projectCode, owner.
+
+Uses GET /api/surveys.
+
+State managed in Zustand slice: surveysSlice.
+
+2. Admin Survey Detail (/admin/surveys/:id)
+
+Show survey metadata: code, name, projectCode, template, deadline, status.
+
+Show assignments table: Assignee, Status (Pending/Draft/Submitted), Email Status.
+
+Show summary block: assignedCount, completedCount, progress bar.
+
+Tabs:
+
+Overview (metadata + assignments) → uses GET /api/surveys/{id}.
+
+Responses → fetches all per-user answers → uses GET /api/surveys/{id}/responses.
+
+Aggregated Summary → shows per-question counts and free text → uses GET /api/surveys/{id}/summary.
+
+Zustand slice: surveyDetailSlice.
+
+User Screens
+3. User Survey Page (/surveys/:id)
+
+Fetch survey by ID → GET /api/surveys/{id}/assigned (or /surveys/{id} with filtering by logged-in user).
+
+Show survey metadata (name, code, projectCode, deadline).
+
+Render dynamic list of questions (generic component):
+
+RADIO → radio button group
+
+CHECKBOX → multiple select checkboxes
+
+TEXT → textarea input
+
+Local draft auto-save → POST /api/surveys/{id}/responses with status=DRAFT.
+
+Final submit → POST /api/surveys/{id}/responses with status=SUBMITTED.
+
+After submit → answers shown in read-only mode.
+
+Component: <SurveyForm questions={questions} mode="edit|view" />.
+
+Zustand slice: userSurveySlice.
+
+Project Owner Screens
+4. Survey Create Page (/surveys/create)
+
+Form fields: Name, Type (PROJECT/GENERAL), ProjectCode, Template (dropdown from GET /api/templates), Assignees (multi-select), Deadline.
+
+On submit → call POST /api/surveys.
+
+Show confirmation and navigate back to dashboard.
+
+Zustand slice: createSurveySlice.
+
+State Management Rules
+
+Each slice should have:
+
+loading, error, data.
+
+Async actions: fetchAllSurveys(), fetchSurveyDetail(id), fetchSurveyResponses(id), fetchSurveySummary(id), createSurvey(payload), submitResponse(id, payload).
+
+Always store responses in normalized form in Zustand store.
+
+Use React Router for navigation.
+
+Keep UI components dumb, Zustand slices handle API + state.
+
+Each screen imports its own slice.
+
+Deliverables
+
+A DashboardPage.tsx for Admin Dashboard
+
+A SurveyDetailPage.tsx for Admin Detail (with Overview, Responses, Summary tabs)
+
+A reusable SurveyForm.tsx component for rendering questions dynamically (radio/checkbox/text)
+
+A UserSurveyPage.tsx that uses SurveyForm
+
+A CreateSurveyPage.tsx for survey creation
+
+Zustand slices for each module with typed actions and selectors
+
+Make sure to generate code with clean separation (components, slices, api/ folder).
