@@ -1,45 +1,101 @@
-📂 Final surveys Schema (MVP)
-{
-  "_id": "6501a1",
-  "type": "PROJECT",                  // PROJECT | GENERAL (future)
-  "projectCode": "PRJ1001",           // reference project
-  "name": "Q4 Audit Survey",          // survey display name
-  "code": "SURV-2025-001",            // unique code/id for survey
-  "createdBy": "sjain",               // creator kerberos
-  "templateId": "tpl1",
-  "templateVersion": 2,               // frozen at creation
-  "status": "OPEN",                   // OPEN | CLOSED
-  "deadline": "2025-10-15T00:00:00Z",
-  "assignments": [
-    { "kerberos": "user200" },
-    { "kerberos": "user201" },
-    { "kerberos": "user202" }
-  ],
-  "createdAt": "2025-10-08T09:00:00Z"
-}
+I am building an Audit Survey application in Spring Boot using MongoDB.
+I already have collections defined: `surevye_templates`, `surveys1`, `survey_responses`.
 
-📂 Final surveyResponses Schema (MVP)
-{
-  "_id": "resp1",
-  "surveyId": "6501a1",               
-  "kerberos": "user200",              // responder kerberos
-  "status": "SUBMITTED",              // DRAFT | SUBMITTED
-  "answers": [
-    {
-      "questionId": "q1",
-      "answerOptionIds": ["1"],       // radio → single element array
-      "answerText": null
-    },
-    {
-      "questionId": "q2",
-      "answerOptionIds": [],          // text answer
-      "answerText": "We had blockers from dependency team"
-    },
-    {
-      "questionId": "q3",
-      "answerOptionIds": ["1", "3"],  // multi-select
-      "answerText": null
-    }
-  ],
-  "submittedAt": "2025-10-08T12:00:00Z"
-}
+Below is the schema and the list of APIs I need. Please generate
+controller, service, and repository classes for each.
+
+---
+
+## Mongo Collections
+
+### templates
+- _id: string (templateId)
+- name: string
+- category: string
+- version: int
+- isActive: boolean
+- questions: [
+    { questionId: string, text: string, type: string, options: [{ id: string, text: string }] }
+  ]
+- createdAt: Date
+
+### surveys
+- _id: string (surveyId)
+- type: string (PROJECT | GENERAL)
+- projectCode: string (nullable if GENERAL)
+- name: string
+- code: string
+- createdBy: string
+- templateId: string
+- templateVersion: int
+- status: string (OPEN | CLOSED)
+- deadline: Date
+- assignments: [ { assignee: string } ]
+- createdAt: Date
+
+### surveyResponses
+- _id: string (responseId)
+- surveyId: string
+- assignee: string
+- status: string (DRAFT | SUBMITTED)
+- answers: [
+    { questionId: string, answerOptionIds: [string], answerText: string }
+  ]
+- submittedAt: Date
+
+Indexes:
+- surveyResponses: unique (surveyId, assignee)
+
+---
+
+## APIs to Implement
+
+### Templates  --> already completed
+1. GET /api/templates  
+   → List all templates (return id, name, version, isActive, questions)
+
+---
+
+### Surveys
+2. POST /api/surveys  
+   → Create a new survey using templateId + version + assignments.  
+   Request: { type, projectCode?, name, code, createdBy, templateId, templateVersion, deadline, assignments: [assignee] }  
+   Response: created survey JSON.
+
+3. GET /api/surveys
+   → List surveys (admin/owner view).
+
+4. GET /api/surveys/{surveyId}  
+   → Get survey details (metadata + assignments+ questions).
+
+5. GET /api/surveys/{surveyId}/assigned
+   → Get survey details + questions for the logged-in assignee.  
+   Should also return already saved responses (if status = DRAFT).
+
+---
+
+### Responses
+6. POST /api/surveys/{surveyId}/responses  
+   → Save responses for an assignee (atomic save all answers).  
+   Request: { assignee, status, answers }  
+   - If status = DRAFT → save but no submittedAt.  
+   - If status = SUBMITTED → save and set submittedAt.  
+   Response: saved response JSON.
+
+7. GET /api/surveys/{surveyId}/responses?assignee={id}  
+   → Get my submitted response (read-only).
+
+8. GET /api/surveys/{surveyId}/responses (admin only)  
+   → Get all responses for a survey, grouped by assignee.  
+
+---
+
+## Requirements
+
+- Use Spring Data MongoDB (`@Document` for entities, `MongoRepository` for repos).  
+- Enforce unique index on (surveyId, assignee) in `surveyResponses`.  
+- Use services for business logic, controllers for endpoints.  
+- Validate inputs and return appropriate error codes (404 for missing survey, 400 for bad request).  
+- Ensure that a survey cannot be responded to if status = CLOSED or deadline < now.  
+- For GET assigned API, merge survey.questions + surveyResponses.answers (if exists, prefill answers).  
+- Return JSON response bodies ready to be consumed by React frontend.  
