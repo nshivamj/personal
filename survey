@@ -1,233 +1,122 @@
-Survey Application — Reference Specification
-🏗️ Architecture
-
-Backend: Spring Boot (Java), MongoDB
-
-Frontend: React 18 + TypeScript + Zustand (state), React Router
-
-Infra: Already set up by you (services + Mongo)
-
-📂 MongoDB Collections
-1. surveyTemplates
-{
-  "_id": "tpl1-v2",
-  "templateId": "tpl1",
-  "version": 2,
-  "name": "Audit Feedback Template",
-  "questions": [
-    {
-      "questionId": "q1",
-      "text": "Did you review the project plan?",
-      "type": "RADIO",
-      "options": [
-        { "id": "1", "text": "Yes" },
-        { "id": "2", "text": "No" }
-      ]
-    },
-    {
-      "questionId": "q2",
-      "text": "Any blockers?",
-      "type": "TEXT"
-    }
-  ],
-  "isActive": true,
-  "createdAt": "2025-10-08T09:00:00Z"
-}
+uild Survey Detail Page (Owner/Admin View)
 
-2. surveys
-{
-  "_id": "6501a1",
-  "surveyId": "6501a1",
-  "code": "SURV-2025-001",
-  "name": "Q4 Audit Survey",
-  "type": "PROJECT",
-  "projectCode": "PRJ1001",
-  "createdBy": "sjain",
-  "templateId": "tpl1",
-  "templateVersion": 2,
-  "status": "OPEN",
-  "deadline": "2025-10-15T00:00:00Z",
-  "assignments": [
-    { "assignee": "user200", "status": "SUBMITTED", "emailStatus": "SENT" },
-    { "assignee": "user201", "status": "DRAFT", "emailStatus": "SENT" },
-    { "assignee": "user202", "status": "PENDING", "emailStatus": "FAILED" }
-  ],
-  "createdAt": "2025-10-08T09:00:00Z",
-  "updatedAt": "2025-10-11T12:00:00Z"
-}
+Build a Survey Detail Page in React 18 + TypeScript with Zustand state management and React Router.
+APIs are already defined (GET /api/surveys/{id}, GET /api/surveys/{id}/responses/summary, GET /api/surveys/{id}/responses/{assignee}).
 
-3. surveyResponses
-{
-  "_id": "resp1",
-  "surveyId": "6501a1",
-  "assignee": "user200",
-  "status": "SUBMITTED",
-  "answers": [
-    { "questionId": "q1", "answerOptionIds": ["1"], "answerText": null },
-    { "questionId": "q2", "answerOptionIds": [], "answerText": "We had blockers" }
-  ],
-  "submittedAt": "2025-10-08T12:00:00Z"
-}
+Layout & Components
+1. Header Section (Overview)
 
-🌐 APIs
-Template APIs
+Show survey metadata:
 
-GET /api/templates → list templates (latest versions, active flag)
+Name, Code, Deadline, Status, Owner
 
-Survey APIs
+Show KPIs:
 
-POST /api/surveys → create survey from template + assignees + deadline
+Total Assigned, Completed, Avg Completion Time
 
-GET /api/surveys → list surveys (filter: owner/admin)
+Status pill (OPEN / CLOSED)
 
-GET /api/surveys/{id} → get survey detail (metadata + assignments with status)
+2. Template Info (Collapsible)
 
-Response APIs
+By default, show only:
 
-POST /api/surveys/{id}/responses → save/submit answers for assignee
+Template Name, Version, Created By
 
-GET /api/surveys/{id}/responses → raw responses (per user, for admin only)
+Hide questions until user clicks “View Questions” → expand list of all questions from template.
 
-Summary APIs
+3. Assignments Table
 
-GET /api/surveys/{id}/summary → aggregated analytics per question
+Columns:
 
-🎨 Frontend Screens
-👤 User (Assignee)
+Assignee (kerberos or name)
 
-Survey Page
+Status (PENDING, DRAFT, SUBMITTED, DISCARDED)
 
-Fetch survey metadata & assigned questions
+Email Status (SENT, FAILED)
 
-Render dynamic question form (SurveyForm)
+Submitted At (if available)
 
-Support Draft Save and Final Submit
+Row clickable → opens Response Modal.
 
-After submit → answers read-only
+4. Results / Summary Section
 
-👑 Owner (Project Owner / Admin-lite)
+Show aggregated stats from GET /api/surveys/{id}/responses/summary:
 
-Survey Dashboard (Owner)
+Completed count / total
 
-Header summary:
+Avg completion time
 
-Total Surveys
+Last submission date
 
-Active Surveys
+Per-question breakdown:
 
-Avg Completion %
+For multiple choice → show counts & percentage (bar/pie chart).
 
-Actions: Create Survey, Grid/List toggle
+For text questions → list top responses or word cloud.
 
-Survey grid with columns: Code, Name, Type, Project, Status, Deadline, Progress
+Future slot: AI-generated summary (display placeholder box).
 
-Survey Detail (Owner)
+5. Response Modal (Drawer)
 
-Survey metadata
+Triggered by clicking on an assignment row.
 
-Assignments table (assignee + status + email status)
+API: GET /api/surveys/{id}/responses/{assignee}
 
-Progress bar (assigned vs completed)
+Modal content:
 
-Survey Create Page
+Assignee + submission status + submittedAt
 
-Select template, assignees, deadline, project code
+Q&A view (Question text + selected option(s) + answerText)
 
-Submit → create new survey
+Include “Open Full Page” button → navigates to /surveys/{id}/responses/{assignee}
 
-🛠️ Admin (Full View)
+Modal closable → return to assignment table context.
 
-Admin Dashboard (all surveys, not just owned ones) → same as Owner but wider scope
 
-Admin Survey Detail
 
-Overview: metadata + assignments + progress
+Complete Survey Detail Page Built Successfully!
+I've created a comprehensive Survey Detail Page with all the components you requested. Here's what's been built:
+🏗️ Architecture & State Management:
+Zustand Store (surveyStore.ts) - Complete state management with mock data
+React Router integration ready
+TypeScript with full type safety
+📋 Components Built:
+📊 SurveyHeader - Overview with metadata and KPIs:
+Survey name, code, deadline, status, owner
+Key metrics: Total Assigned, Completed, Avg Completion Time, Last Submission
+Status pill (OPEN/CLOSED) with icons
+Progress bar showing completion rate
+📄 TemplateInfo - Collapsible template details:
+Template name, version, created by (always visible)
+"View Questions" button to expand/collapse question list
+Full question details with types, options, and requirements
+Color-coded question types with icons
+👥 AssignmentsTable - Interactive assignments tracking:
+Columns: Assignee, Status, Email Status, Assigned At, Submitted At, Actions
+Sortable columns with visual indicators
+Search functionality by assignee name/email
+Status filtering (ALL, PENDING, DRAFT, SUBMITTED, DISCARDED)
+Clickable rows that open Response Modal
+Color-coded status badges
+📈 ResultsSummary - Analytics and insights:
+Aggregated stats: completion rate, responses, avg time
+Per-question breakdown with bar charts
+Multiple choice responses with percentages
+AI Summary placeholder for future features
+Visual progress bars for response distribution
+🔍 ResponseModal - Detailed response viewer:
+Triggered by clicking assignment rows
+Shows assignee info, submission status, dates
+Q&A view with formatted answers
+Handles different statuses (PENDING, DRAFT, SUBMITTED, DISCARDED)
+"Open Full Page" button for navigation
+Proper loading states and error handling
+🎨 Features Implemented:
+Responsive Design - Works on all screen sizes
+Loading States - Skeleton loaders throughout
+Error Handling - Proper error states and messaging
+Interactive Elements - Sortable tables, collapsible sections
+Color Coding - Status badges, progress bars, icons
+Mock Data - Complete realistic test data
+Type Safety - Full TypeScript coverage
 
-Responses tab: all raw responses per user
-
-Summary tab: aggregated analytics
-
-
-
-
-Build a Survey Dashboard (Owner) page (/owner/dashboard) in React 18 + TypeScript.
-Use Zustand for state management.
-API integration should use fetch or Axios with async actions inside the Zustand slice.
-
-Layout
-
-Header Section (first half of page): "Survey Management"
-
-Subtitle: "Create and manage audit surveys for your projects"
-
-Quick Stats (cards / tiles):
-
-Total Surveys = count of surveys returned
-
-Active Surveys = count of surveys with status=OPEN
-
-Avg Completion = average completion across all surveys =
-(Σ (completedCount / assignedCount)) / totalSurveys
-
-Buttons:
-
-Create Survey (navigates to /owner/surveys/create)
-
-Grid View / List View toggle (default Grid)
-
-Survey Grid/Table Section (second half of page):
-
-Table columns:
-
-Survey Code
-
-Name
-
-Type (PROJECT / GENERAL)
-
-Project Code
-
-Status (OPEN / CLOSED)
-
-Deadline
-
-Progress (visual bar + fraction like 7/10)
-
-Row click → navigates to Survey Detail (/owner/surveys/:id).
-
-Filters: status, projectCode.
-
-Empty state: “No surveys created yet. Click ‘Create Survey’ to start.”
-
-Loading + error states.
-
-State Management (Zustand slice: surveysSlice)
-
-State:
-
-surveys: Survey[]
-
-loading: boolean
-
-error: string | null
-
-stats: { totalSurveys: number; activeSurveys: number; avgCompletion: number }
-
-Actions:
-
-fetchSurveys(filters?) → calls GET /api/surveys and computes stats from assignments[].
-
-
-Deliverables
-
-SurveyDashboardOwnerPage.tsx → page with:
-
-Header section with summary + actions
-
-Survey grid/table
-
-useSurveysSlice.ts → Zustand slice with async actions + computed stats
-
-Utility function calculateStats(surveys: Survey[]): SurveyStats
-
-Components: StatsCard.tsx, SurveyTable.tsx
