@@ -1,357 +1,68 @@
-📑 Survey Application Backend Design Document
-1. Overview
-
-This service enables creation, assignment, and response collection for surveys (audit/project/general).
-Key entities:
-
-SurveyTemplate → reusable templates with versioned questions.
-
-Survey → created survey instances linked to a template version.
-
-SurveyResponse → assignee responses per survey.
-
-Stack: Spring Boot + MongoDB
-
-2. Data Model
-2.1 SurveyTemplate Collection
-
-Stores reusable templates, versioned for immutability.
-
-{
-  "_id": "tpl1-v2",
-  "templateId": "tpl1",
-  "version": 2,
-  "name": "Audit Feedback Template",
-  "questions": [
-    {
-      "questionId": "q1",
-      "text": "Did you review the project plan?",
-      "type": "RADIO",
-      "options": [
-        { "id": "1", "text": "Yes" },
-        { "id": "2", "text": "No" }
-      ]
-    },
-    {
-      "questionId": "q2",
-      "text": "Any blockers?",
-      "type": "TEXT"
-    }
-  ],
-  "state": "PUBLISHED",         // DRAFT | PUBLISHED
-  "availability": "ACTIVE",     // ACTIVE | INACTIVE
-  "createdBy": "sjain",
-  "createdAt": "2025-10-08T09:00:00Z"
-}
-
-2.2 Survey Collection
-
-Represents a created survey instance.
-
-{
-  "_id": "6501a1",
-  "surveyId": "6501a1",
-  "code": "SURV-2025-001",
-  "name": "Q4 Audit Survey",
-  "type": "PROJECT",                // PROJECT | GENERAL
-  "projectCode": "PRJ1001",
-  "createdBy": "sjain",
-  "templateRef": "tpl1-v2",          // ref to template version
-  "status": "OPEN",                  // OPEN | CLOSED
-  "deadline": "2025-10-15T00:00:00Z",
-  "assignments": [
-    { "assignee": "user200", "status": "SUBMITTED", "emailStatus": "SENT" },
-    { "assignee": "user201", "status": "PENDING", "emailStatus": "SENT" }
-  ],
-  "createdAt": "2025-10-08T09:00:00Z",
-  "updatedAt": "2025-10-11T12:00:00Z"
-}
+Summarized Ask
 
-2.3 SurveyResponse Collection
+Enable GitHub Copilot usage metrics at the team and org level, providing leadership with visibility into adoption, usage patterns, and ROI.
 
-Stores responses per survey per assignee.
+Business Purpose / Benefit
 
-{
-  "_id": "resp1",
-  "surveyId": "6501a1",
-  "assignee": "user200",
-  "status": "SUBMITTED",           // DRAFT | SUBMITTED | DISCARDED
-  "answers": [
-    { "questionId": "q1", "answerOptionIds": ["2"], "answerText": null },
-    { "questionId": "q2", "answerOptionIds": [], "answerText": "Blocked by infra team" }
-  ],
-  "createdAt": "2025-10-08T10:00:00Z",
-  "updatedAt": "2025-10-11T11:30:00Z",
-  "submittedAt": "2025-10-11T12:00:00Z"
-}
+Helps leadership understand how widely Copilot is being used across teams.
 
-3. APIs
-3.1 Template APIs
-Method	Endpoint	Description
-GET	/api/templates	List active templates (latest version)
-GET	/api/templates/{id}	Get specific template version
-POST	/api/templates	Create new template version
-3.2 Survey APIs
-Method	Endpoint	Description
-POST	/api/surveys	Create survey from template
-GET	/api/surveys	List surveys (optional filters)
-POST	/api/surveys/search	Paginated search with filters
-GET	/api/surveys/{surveyId}	Get survey details (assignments, metadata)
-GET	/api/surveys/code/{code}	Get survey by human-readable code
-3.3 Assignment / Response APIs
-Method	Endpoint	Description
-GET	/api/surveys/{surveyId}/assigned	Get survey (for assignee) with prefilled draft/submitted response
-POST	/api/surveys/{surveyId}/responses	Save or submit responses (atomic per assignee)
-GET	/api/surveys/{surveyId}/responses/{assignee}	Get detailed response for specific assignee (admin/owner)
-GET	/api/surveys/{surveyId}/responses/summary	Get aggregated response summary per question
-3.4 Notification APIs
-Method	Endpoint	Description
-POST	/api/surveys/{id}/notify	Trigger email notifications to assignees
-4. Backend Logic
+Provides insight into developer productivity gains and adoption trends.
 
-Survey Creation
+Supports budgeting decisions (license renewals, seat expansions).
 
-Validate template exists and is PUBLISHED + ACTIVE.
+Enables benchmarking between teams (e.g., early adopters vs laggards).
 
-Validate deadline > today.
+Informs enablement programs (training, best practices) based on actual usage data.
 
-Insert Survey with assignments (default status = PENDING).
+Impact of Not Being Done
 
-Trigger email notifications.
+Leadership will lack visibility into Copilot adoption and effectiveness.
 
-Survey Assignment Fetch (Assignee)
+Possible underutilization of paid licenses, leading to wasted spend.
 
-Validate survey is assigned to current user.
+Hard to justify renewal costs without clear usage data.
 
-Return metadata + questions + draft/submitted response.
+Teams missing adoption may not be identified for enablement support.
 
-If survey closed/submitted → return closed message only.
+Risk of uneven productivity benefits across org without leadership insight.
 
-Survey Response Save/Submit
+Acceptance Criteria (Given / When / Then format)
+Usage Tracking – License Level
 
-Save draft responses continuously (autosave).
+Given Copilot licenses are assigned to developers
 
-On SUBMIT:
+When developers use Copilot in IDEs (VS Code, IntelliJ, etc.)
 
-Validate mandatory questions answered.
+Then system captures metrics like active seats, suggestions accepted, suggestions rejected, and time saved.
 
-Mark assignments[].status = SUBMITTED.
+Team-Level Aggregation
 
-Lock response read-only.
+Given developers belong to teams in GitHub Org (via teams/groups)
 
-Survey Detail (Admin/Owner)
+When usage data is collected
 
-Fetch survey by surveyId/code.
+Then metrics are aggregated and displayed per team, with roll-up at org level.
 
-Join assignments and response summary.
+Leadership Dashboard
 
-Show per-assignee status.
+Given leadership accesses the dashboard
 
-Response Summary
+When they log in with appropriate role-based access
 
-Aggregation pipeline: group by questionId → count answers → avg completion time.
+Then they can view:
 
-Return breakdown for dashboards.
+Active vs inactive Copilot users (per team)
 
-5. Audit & Traceability
+Suggestions accepted/rejected ratio
 
-createdAt, updatedAt in all collections.
+Hours saved (estimates based on Copilot telemetry)
 
-submittedAt in SurveyResponse.
+Adoption trend over time
 
-assignments.emailStatus tracks notification success/failure.
+Alerts (Optional, Stretch Goal)
 
-Immutable templates → each survey references a specific version.
+Given team adoption falls below a defined threshold (e.g., <30% of devs active)
 
-6. Future Enhancements
+When usage data is refreshed
 
-AI-generated survey summaries.
-
-Response exports (CSV/Excel).
-
-Anonymous surveys (no assignee stored).
-
-Role-based access for admins, owners, assignees.
-
-✅ This doc is enough for your backend team to:
-
-Create Mongo collections
-
-Define DTOs + Entities in Spring Boot
-
-Implement controllers/services
-
-Wire to UI & email service
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Ticket 1: Create Survey
-
-Story
-As a Project Owner, I should be able to create a survey by selecting a template, project, deadline, and assignees.
-
-Acceptance Criteria (Step-by-Step)
-
-Given I open the “Create Survey” link
-Then I should see a form with fields:
-
-Survey Name (text input, required)
-
-Project (dropdown populated from projects API, required)
-
-Template (dropdown populated from templates API, required)
-
-Assignees (multi-select searchable field for employees, required)
-
-Deadline (date picker, required, only future dates allowed)
-
-Given I fill in valid inputs
-When I click “Create”
-Then a survey should be created via POST /api/surveys and I should see a success message with survey code.
-
-Given I enter invalid data (e.g. past deadline, empty fields)
-When I try to submit
-Then I should see inline validation errors and the survey should not be created.
-
-Ticket 2: View Survey (Assignee)
-
-Story
-As an Assignee, when I open a survey link, I should see survey details and be able to view/fill my responses dynamically.
-
-Acceptance Criteria (Step-by-Step)
-
-Given I open a survey link (/surveys/{code})
-Then I should see:
-
-Header section with Survey Name, Code, Project, Deadline, and Status
-
-Body section with survey questions loaded from template
-
-Given survey is OPEN and my assignment is PENDING or DRAFT
-Then I should see a question form:
-
-Radio button group for single-choice questions
-
-Checkboxes for multiple-choice
-
-Text field for short answer
-
-Textarea for long answer
-
-My draft answers should be prefilled if they exist
-
-Given survey is CLOSED OR my status = SUBMITTED
-Then I should only see a message:
-“Thank you. Survey is closed or already submitted.”
-
-Ticket 3: Submit Response
-
-Story
-As an Assignee, I should be able to save a draft and finally submit my responses.
-
-Acceptance Criteria (Step-by-Step)
-
-Given I start filling answers
-When I change any answer
-Then the system should auto-save a draft with status = DRAFT.
-
-Given I have answered all mandatory questions
-When I click “Submit”
-Then my response should be saved with status = SUBMITTED and the form should become read-only.
-
-Given I have already submitted
-When I revisit the survey link
-Then I should see my submitted answers in read-only mode.
-
-Ticket 4: Email Notification
-
-Story
-As an Assignee, I should get an email when I am assigned to a survey.
-
-Acceptance Criteria (Step-by-Step)
-
-Given a survey is created with me as an assignee
-When the survey is created successfully
-Then I should receive an email containing:
-
-Survey Name and Code
-
-Survey Deadline
-
-Link to open the survey
-
-Given email sending fails
-Then the assignment should be marked emailStatus = FAILED in the survey data.
-
-Ticket 5: Survey Dashboard (Owner/Admin)
-
-Story
-As an Owner/Admin, I should be able to see a dashboard of all my surveys with progress and stats.
-
-Acceptance Criteria (Step-by-Step)
-
-Given I open the dashboard page
-Then I should see a header summary section with:
-
-Total Surveys created
-
-Active Surveys count
-
-Average Completion %
-
-Given I scroll below
-Then I should see a grid/table of surveys with columns:
-
-Survey Name
-
-Code
-
-Type (Project/General)
-
-Deadline
-
-Status (OPEN/CLOSED)
-
-Progress (Completed vs Assigned)
-
-Given I click on a survey row
-When I select it
-Then I should be taken to the Survey Detail page.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+Then leadership receives an alert to follow up with the team.
