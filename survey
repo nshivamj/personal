@@ -1,43 +1,35 @@
-Sub ColorTokensFromPrefix()
-    Dim para As Paragraph
+Sub ColorTokensInDocument()
     Dim rng As Range
     Dim txt As String
     Dim pos As Long, startPos As Long, endPos As Long
     Dim token As String, firstChar As String
     
-    ' Example text
-    txt = "[name][D:division][K:kci][R:risk][A:as]"
+    ' Work on the whole document
+    Set rng = ActiveDocument.Content
+    rng.Font.Color = wdColorBlack ' reset to black first
     
-    ' Insert text in document
-    Set para = ActiveDocument.Content.Paragraphs.Add
-    para.Range.Text = txt
-    
-    ' Work on the paragraph range
-    Set rng = para.Range
-    rng.Font.Color = wdColorBlack ' default black
-    
-    ' Loop through tokens
+    txt = rng.Text
     pos = 1
-    Do While InStr(pos, rng.Text, "[") > 0
-        startPos = InStr(pos, rng.Text, "[")
-        endPos = InStr(startPos, rng.Text, "]")
+    
+    ' Loop through all tokens inside []
+    Do While InStr(pos, txt, "[") > 0
+        startPos = InStr(pos, txt, "[")
+        endPos = InStr(startPos, txt, "]")
         
         If endPos > startPos Then
-            token = Mid(rng.Text, startPos, endPos - startPos + 1)
-            
+            token = Mid(txt, startPos, endPos - startPos + 1)
             If Len(token) > 2 Then
-                firstChar = Mid(token, 2, 1) ' character after [
+                firstChar = Mid(token, 2, 1) ' char after [
                 
                 ' Apply color based on prefix
                 Select Case UCase(firstChar)
-                    Case "D" ' Division
-                        rng.Characters(startPos).Duplicate.Characters(1).Text = rng.Characters(startPos).Text
+                    Case "D"
                         rng.Characters(startPos, Len(token)).Font.Color = wdColorRed
-                    Case "K" ' KCI
+                    Case "K"
                         rng.Characters(startPos, Len(token)).Font.Color = wdColorOrange
-                    Case "R" ' Risk
+                    Case "R"
                         rng.Characters(startPos, Len(token)).Font.Color = wdColorBlue
-                    Case "A" ' Audit Strategy
+                    Case "A"
                         rng.Characters(startPos, Len(token)).Font.Color = wdColorGreen
                 End Select
             End If
