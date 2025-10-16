@@ -1,42 +1,48 @@
-Sub FormatProjectDataWithColors()
-    Dim ws As Worksheet
-    Dim lastRow As Long
-    Dim i As Long
-    Dim combinedText As String
+Sub ColorTokensFromPrefix()
+    Dim para As Paragraph
+    Dim rng As Range
+    Dim txt As String
+    Dim pos As Long, startPos As Long, endPos As Long
+    Dim token As String, firstChar As String
     
-    Set ws = ThisWorkbook.Sheets("Sheet1") ' Change if needed
-    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    ' Example text
+    txt = "[name][D:division][K:kci][R:risk][A:as]"
     
-    For i = 2 To lastRow ' assuming headers in row 1
-        combinedText = ws.Cells(i, 1).Value & " [" & ws.Cells(i, 2).Value & _
-                       "] [" & ws.Cells(i, 3).Value & "] [" & ws.Cells(i, 4).Value & _
-                       "] [" & ws.Cells(i, 5).Value & "]"
+    ' Insert text in document
+    Set para = ActiveDocument.Content.Paragraphs.Add
+    para.Range.Text = txt
+    
+    ' Work on the paragraph range
+    Set rng = para.Range
+    rng.Font.Color = wdColorBlack ' default black
+    
+    ' Loop through tokens
+    pos = 1
+    Do While InStr(pos, rng.Text, "[") > 0
+        startPos = InStr(pos, rng.Text, "[")
+        endPos = InStr(startPos, rng.Text, "]")
         
-        With ws.Cells(i, 6) ' Output in Column F
-            .Value = combinedText
-            .Font.Color = RGB(0, 0, 0) ' Reset whole cell to black
+        If endPos > startPos Then
+            token = Mid(rng.Text, startPos, endPos - startPos + 1)
             
-            Dim txt As String, startPos As Long
-            
-            ' Division (Red)
-            txt = "[" & ws.Cells(i, 2).Value & "]"
-            startPos = InStr(.Value, txt)
-            If startPos > 0 Then .Characters(startPos, Len(txt)).Font.Color = RGB(255, 0, 0)
-            
-            ' Strategy (Orange)
-            txt = "[" & ws.Cells(i, 3).Value & "]"
-            startPos = InStr(.Value, txt)
-            If startPos > 0 Then .Characters(startPos, Len(txt)).Font.Color = RGB(255, 165, 0)
-            
-            ' KCI (Blue)
-            txt = "[" & ws.Cells(i, 4).Value & "]"
-            startPos = InStr(.Value, txt)
-            If startPos > 0 Then .Characters(startPos, Len(txt)).Font.Color = RGB(0, 0, 255)
-            
-            ' Risk Theme (Green)
-            txt = "[" & ws.Cells(i, 5).Value & "]"
-            startPos = InStr(.Value, txt)
-            If startPos > 0 Then .Characters(startPos, Len(txt)).Font.Color = RGB(0, 128, 0)
-        End With
-    Next i
+            If Len(token) > 2 Then
+                firstChar = Mid(token, 2, 1) ' character after [
+                
+                ' Apply color based on prefix
+                Select Case UCase(firstChar)
+                    Case "D" ' Division
+                        rng.Characters(startPos).Duplicate.Characters(1).Text = rng.Characters(startPos).Text
+                        rng.Characters(startPos, Len(token)).Font.Color = wdColorRed
+                    Case "K" ' KCI
+                        rng.Characters(startPos, Len(token)).Font.Color = wdColorOrange
+                    Case "R" ' Risk
+                        rng.Characters(startPos, Len(token)).Font.Color = wdColorBlue
+                    Case "A" ' Audit Strategy
+                        rng.Characters(startPos, Len(token)).Font.Color = wdColorGreen
+                End Select
+            End If
+        End If
+        
+        pos = endPos + 1
+    Loop
 End Sub
