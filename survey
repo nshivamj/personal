@@ -1,68 +1,42 @@
-Summarized Ask
-
-Enable GitHub Copilot usage metrics at the team and org level, providing leadership with visibility into adoption, usage patterns, and ROI.
-
-Business Purpose / Benefit
-
-Helps leadership understand how widely Copilot is being used across teams.
-
-Provides insight into developer productivity gains and adoption trends.
-
-Supports budgeting decisions (license renewals, seat expansions).
-
-Enables benchmarking between teams (e.g., early adopters vs laggards).
-
-Informs enablement programs (training, best practices) based on actual usage data.
-
-Impact of Not Being Done
-
-Leadership will lack visibility into Copilot adoption and effectiveness.
-
-Possible underutilization of paid licenses, leading to wasted spend.
-
-Hard to justify renewal costs without clear usage data.
-
-Teams missing adoption may not be identified for enablement support.
-
-Risk of uneven productivity benefits across org without leadership insight.
-
-Acceptance Criteria (Given / When / Then format)
-Usage Tracking – License Level
-
-Given Copilot licenses are assigned to developers
-
-When developers use Copilot in IDEs (VS Code, IntelliJ, etc.)
-
-Then system captures metrics like active seats, suggestions accepted, suggestions rejected, and time saved.
-
-Team-Level Aggregation
-
-Given developers belong to teams in GitHub Org (via teams/groups)
-
-When usage data is collected
-
-Then metrics are aggregated and displayed per team, with roll-up at org level.
-
-Leadership Dashboard
-
-Given leadership accesses the dashboard
-
-When they log in with appropriate role-based access
-
-Then they can view:
-
-Active vs inactive Copilot users (per team)
-
-Suggestions accepted/rejected ratio
-
-Hours saved (estimates based on Copilot telemetry)
-
-Adoption trend over time
-
-Alerts (Optional, Stretch Goal)
-
-Given team adoption falls below a defined threshold (e.g., <30% of devs active)
-
-When usage data is refreshed
-
-Then leadership receives an alert to follow up with the team.
+Sub FormatProjectDataWithColors()
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim i As Long
+    Dim combinedText As String
+    
+    Set ws = ThisWorkbook.Sheets("Sheet1") ' Change if needed
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    For i = 2 To lastRow ' assuming headers in row 1
+        combinedText = ws.Cells(i, 1).Value & " [" & ws.Cells(i, 2).Value & _
+                       "] [" & ws.Cells(i, 3).Value & "] [" & ws.Cells(i, 4).Value & _
+                       "] [" & ws.Cells(i, 5).Value & "]"
+        
+        With ws.Cells(i, 6) ' Output in Column F
+            .Value = combinedText
+            .Font.Color = RGB(0, 0, 0) ' Reset whole cell to black
+            
+            Dim txt As String, startPos As Long
+            
+            ' Division (Red)
+            txt = "[" & ws.Cells(i, 2).Value & "]"
+            startPos = InStr(.Value, txt)
+            If startPos > 0 Then .Characters(startPos, Len(txt)).Font.Color = RGB(255, 0, 0)
+            
+            ' Strategy (Orange)
+            txt = "[" & ws.Cells(i, 3).Value & "]"
+            startPos = InStr(.Value, txt)
+            If startPos > 0 Then .Characters(startPos, Len(txt)).Font.Color = RGB(255, 165, 0)
+            
+            ' KCI (Blue)
+            txt = "[" & ws.Cells(i, 4).Value & "]"
+            startPos = InStr(.Value, txt)
+            If startPos > 0 Then .Characters(startPos, Len(txt)).Font.Color = RGB(0, 0, 255)
+            
+            ' Risk Theme (Green)
+            txt = "[" & ws.Cells(i, 5).Value & "]"
+            startPos = InStr(.Value, txt)
+            If startPos > 0 Then .Characters(startPos, Len(txt)).Font.Color = RGB(0, 128, 0)
+        End With
+    Next i
+End Sub
