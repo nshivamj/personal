@@ -1,40 +1,338 @@
-Sub ColorTokensInDocument()
-    Dim rng As Range
-    Dim txt As String
-    Dim pos As Long, startPos As Long, endPos As Long
-    Dim token As String, firstChar As String
-    
-    ' Work on the whole document
-    Set rng = ActiveDocument.Content
-    rng.Font.Color = wdColorBlack ' reset to black first
-    
-    txt = rng.Text
-    pos = 1
-    
-    ' Loop through all tokens inside []
-    Do While InStr(pos, txt, "[") > 0
-        startPos = InStr(pos, txt, "[")
-        endPos = InStr(startPos, txt, "]")
-        
-        If endPos > startPos Then
-            token = Mid(txt, startPos, endPos - startPos + 1)
-            If Len(token) > 2 Then
-                firstChar = Mid(token, 2, 1) ' char after [
-                
-                ' Apply color based on prefix
-                Select Case UCase(firstChar)
-                    Case "D"
-                        rng.Characters(startPos, Len(token)).Font.Color = wdColorRed
-                    Case "K"
-                        rng.Characters(startPos, Len(token)).Font.Color = wdColorOrange
-                    Case "R"
-                        rng.Characters(startPos, Len(token)).Font.Color = wdColorBlue
-                    Case "A"
-                        rng.Characters(startPos, Len(token)).Font.Color = wdColorGreen
-                End Select
-            End If
-        End If
-        
-        pos = endPos + 1
-    Loop
-End Sub
+📝 Prompt: Add Metadata to Survey Domain & Implement Analytics API
+
+You are working on a Spring Boot + MongoDB survey application.
+We need to enhance the domain model to support metadata-driven survey analytics and create a new analytics API.
+
+1. Domain Model Updates
+SurveyTemplate
+
+Each Question should have:
+
+questionId
+
+text
+
+type (RADIO, CHECKBOX, TEXT)
+
+metadata → Map<String, String> (e.g., { "theme": "Communication", "riskTag": "Clarity" })
+
+options → List of Option
+
+Option
+
+Fields:
+
+id
+
+text
+
+metadata → Map<String, String> (e.g., { "category": "Agree", "sentiment": "Positive", "weight": "2" })
+
+👉 This ensures categories, sentiments, weights, or any future attribute can be defined per template.
+
+2. DTOs for Analytics API
+
+Create DTOs under web.dto.analytics package:
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class SurveyAnalyticsResponse {
+    private String surveyId;
+    private List<QuestionAnalyticsDTO> questions;
+}
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class QuestionAnalyticsDTO {
+    private String questionId;
+    private String questionText;
+    private String type;
+    private Map<String, String> metadata; // from template
+    private List<OptionDistributionDTO> distribution; // raw option counts
+    private Map<String, List<GenericAggregationDTO>> rollups; // e.g. category, sentiment
+    private Map<String, List<DimensionGroupDTO>> dimensionRollups; // e.g. region, title
+}
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class OptionDistributionDTO {
+    private String optionId;
+    private String optionText;
+    private long count;
+}
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class GenericAggregationDTO {
+    private String key;
+    private long count;
+}
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class DimensionGroupDTO {
+    private String key; // region/title value
+    private long totalRespondents;
+    private Map<String, List<GenericAggregationDTO>> rollups; // rollups inside each dimension
+}
+
+3. Analytics API Endpoint
+
+Create a new controller SurveyAnalyticsController:
+
+@RestController
+@RequestMapping("/api/surveys/{surveyId}/analytics")
+@RequiredArgsConstructor
+public class SurveyAnalyticsController {
+
+    private final SurveyAnalyticsService surveyAnalyticsService;
+
+    @GetMapping
+    public SurveyAnalyticsResponse getAnalytics(
+            @PathVariable String surveyId,
+            @RequestParam(required = false) List<String> rollups,     // e.g. category,sentiment
+            @RequestParam(required = false) List<String> dimensions, // e.g. region,title
+            @RequestParam(defaultValue = "QUESTION") String level     // QUESTION, THEME, ALL
+    ) {
+        return surveyAnalyticsService.getSurveyAnalytics(surveyId, rollups, dimensions, level);
+    }
+}
+
+4. Service Layer
+
+SurveyAnalyticsService should:
+
+Fetch the SurveyTemplate for the survey (to read metadata).
+
+Fetch all SurveyResponses for that survey.
+
+Perform aggregations:
+
+Raw distribution → count per optionId
+
+rollups → map optionIds to metadata keys (category, sentiment, etc.) and sum
+
+dimensionRollups → enrich assignees with RDH metadata (region, title) and group counts
+
+Return in the SurveyAnalyticsResponse structure.
+
+5. Example API Call
+GET /api/surveys/6501a1/analytics?rollups=category,sentiment&dimensions=region,title&level=QUESTION
+
+
+Response Example
+
+{
+  "surveyId": "6501a1",
+  "questions": [
+    {
+      "questionId": "q1",
+      "questionText": "The project plan was clear.",
+      "type": "RADIO",
+      "metadata": { "theme": "Communication" },
+      "distribution": [
+        { "optionId": "1", "optionText": "Strongly Disagree", "count": 5 },
+        { "optionId": "2", "optionText": "Disagree", "count": 10 },
+        { "optionId": "3", "optionText": "Neutral", "count": 8 },
+        { "optionId": "4", "optionText": "Agree", "count": 20 },
+        { "optionId": "5", "optionText": "Strongly Agree", "count": 7 }
+      ],
+      "rollups": {
+        "category": [
+          { "key": "Disagree", "count": 15 },
+          { "key": "Neutral", "count": 8 },
+          { "key": "Agree", "count": 27 }
+        ],
+        "sentiment": [
+          { "key": "Negative", "count": 15 },
+          { "key": "Positive", "count": 27 }
+        ]
+      },
+      "dimensionRollups": {
+        "region": [
+          {
+            "key": "APAC",
+            "totalRespondents": 20,
+            "rollups": {
+              "category": [
+                { "key": "Disagree", "count": 7 },
+                { "key": "Neutral", "count": 5 },
+                { "key": "Agree", "count": 8 }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+
+✅ With this prompt, Copilot will:
+
+Add metadata fields to Question and Option in domain.
+
+Create DTOs for analytics response.
+
+Implement SurveyAnalyticsController + SurveyAnalyticsService.
+
+Generate generic analytics responses (raw, rollup, dimension-based).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+📝 Prompt: Add Survey Summary Inline to Existing APIs
+
+You are working on a Spring Boot + MongoDB survey application.
+Currently, you have the following collections/entities:
+
+Survey → holds survey metadata (code, name, deadline, assignments, etc.)
+
+SurveyResponse → holds per-user responses
+
+SurveyTemplate → holds template & questions
+
+Now we want to add a summary field inline in Survey and return it as part of existing APIs (no separate summary API).
+
+🔎 Required Changes
+1. Update Domain Model
+
+In Survey entity (Mongo document):
+
+@Document("surveys")
+public class Survey {
+    private String id;
+    private String code;
+    private String name;
+    private Instant deadline;
+    private List<Assignment> assignments;
+    private SurveySummary summary; // new field
+}
+
+
+Add new class:
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class SurveySummary {
+    private String content;     // AI-generated summary text
+    private String sentiment;   // Positive, Negative, Neutral, Mixed
+    private Instant generatedAt;
+}
+
+2. Update DTOs
+
+In SurveyDTO and SurveyDetailDTO (or whatever DTOs you expose in web layer):
+
+public class SurveyDTO {
+    private String id;
+    private String code;
+    private String name;
+    private Instant deadline;
+    private SurveySummaryDTO summary; // add summary here
+}
+
+public class SurveySummaryDTO {
+    private String content;
+    private String sentiment;
+    private Instant generatedAt;
+}
+
+3. Update Mappers
+
+Update your SurveyMapper to map Survey.summary → SurveySummaryDTO.
+
+4. Update APIs
+
+No new endpoints are required. Just ensure:
+
+GET /api/surveys → returns survey list with summary field.
+
+GET /api/surveys/{id} → returns survey detail with summary field.
+
+Example Response for list:
+
+[
+  {
+    "id": "6501a1",
+    "code": "SURV-2025-001",
+    "name": "Audit Survey - Project Alpha",
+    "deadline": "2025-11-15T00:00:00Z",
+    "summary": {
+      "content": "Most respondents agreed planning was clear, but deadlines remain a recurring concern.",
+      "sentiment": "Mixed",
+      "generatedAt": "2025-10-22T08:30:00Z"
+    }
+  }
+]
+
+
+Example Response for detail:
+
+{
+  "id": "6501a1",
+  "code": "SURV-2025-001",
+  "name": "Audit Survey - Project Alpha",
+  "deadline": "2025-11-15T00:00:00Z",
+  "assignments": [
+    { "assignee": "sjain", "status": "COMPLETED" },
+    { "assignee": "rkumar", "status": "PENDING" }
+  ],
+  "summary": {
+    "content": "Most respondents agreed planning was clear, but deadlines remain a recurring concern.",
+    "sentiment": "Mixed",
+    "generatedAt": "2025-10-22T08:30:00Z"
+  }
+}
+
+5. Summary Generation (Background / On Demand)
+
+Summaries should be generated by a service that:
+
+Aggregates survey responses
+
+Calls AI summarization API (Copilot/OpenAI)
+
+Persists the summary in Survey.summary
+
+Regeneration can be triggered on survey close, or manually via admin.
+
+✅ Deliverables
+
+Update Survey entity to include SurveySummary.
+
+Update SurveyDTO and SurveyDetailDTO to expose summary.
+
+Update mappers accordingly.
+
+Ensure existing survey APIs (GET /api/surveys, GET /api/surveys/{id}) return the summary inline.
