@@ -96,3 +96,171 @@ export function getChartData({
 
   return { categories, series };
 }
+
+
+
+
+
+
+
+
+
+
+
+🧩 Final Simplified Component — SurveyChart
+
+Here’s the single React component that can render all 4 chart styles based on a chartType prop.
+You’ll reuse the same getChartData() function we built earlier (auto-counts rows).
+
+import React, { useEffect, useMemo, useState } from "react";
+import Highcharts from "highcharts";
+import HighchartsReact from "highcharts-react-official";
+import { getChartData } from "./getChartData";
+
+interface SurveyChartProps {
+  data: any[];
+  title?: string;
+  groupBy: string[];
+  pivotBy?: string;
+  filters?: Record<string, any>;
+  chartType?: "bar" | "stackedBar" | "groupedColumn" | "stackedColumn";
+  height?: number;
+}
+
+export const SurveyChart: React.FC<SurveyChartProps> = ({
+  data,
+  title = "Survey Chart",
+  groupBy,
+  pivotBy,
+  filters = {},
+  chartType = "bar",
+  height = 400,
+}) => {
+  const [chartOptions, setChartOptions] = useState<Highcharts.Options>();
+
+  const chartData = useMemo(
+    () =>
+      getChartData({
+        data,
+        groupBy,
+        pivotBy,
+        filters,
+      }),
+    [data, groupBy, pivotBy, filters]
+  );
+
+  useEffect(() => {
+    if (!chartData) return;
+
+    const isBar = chartType.includes("bar");
+    const isStacked = chartType.includes("stacked");
+
+    const options: Highcharts.Options = {
+      chart: {
+        type: isBar ? "bar" : "column",
+        height,
+        backgroundColor: "transparent",
+      },
+      title: {
+        text: title,
+        align: "left",
+        style: { fontSize: "16px", fontWeight: "bold" },
+      },
+      xAxis: {
+        categories: chartData.categories,
+        title: { text: groupBy.join(" → ") },
+        labels: { style: { fontSize: "11px" } },
+      },
+      yAxis: {
+        min: 0,
+        title: { text: "Count" },
+        stackLabels: { enabled: isStacked },
+      },
+      legend: {
+        align: "right",
+        verticalAlign: "middle",
+        layout: "vertical",
+        itemStyle: { fontSize: "11px" },
+      },
+      tooltip: {
+        shared: true,
+        formatter: function () {
+          return `<b>${this.x}</b><br/>${this.points
+            ?.map((p: any) => `${p.series.name}: <b>${p.y}</b>`)
+            .join("<br/>")}`;
+        },
+      },
+      plotOptions: {
+        series: {
+          stacking: isStacked ? "normal" : undefined,
+          borderWidth: 0,
+          dataLabels: {
+            enabled: true,
+            style: { fontSize: "10px", textOutline: "none" },
+          },
+        },
+      },
+      series: chartData.series as Highcharts.SeriesOptionsType[],
+    };
+
+    setChartOptions(options);
+  }, [chartData, chartType, title, groupBy, height]);
+
+  return (
+    <div style={{ width: "100%", height }}>
+      {chartOptions ? (
+        <HighchartsReact highcharts={Highcharts} options={chartOptions} />
+      ) : (
+        <div
+          style={{
+            height,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#777",
+          }}
+        >
+          No data available
+        </div>
+      )}
+    </div>
+  );
+};
+
+✅ Usage Examples
+🔹 Stacked Bar
+<SurveyChart
+  data={surveyData}
+  title="Q1 Response Split by Title"
+  groupBy={["title"]}
+  pivotBy="response"
+  filters={{ questionId: "Q1" }}
+  chartType="stackedBar"
+/>
+
+🔹 Simple Bar (non-stacked)
+<SurveyChart
+  data={surveyData}
+  title="Response Count by Country"
+  groupBy={["country"]}
+  pivotBy="response"
+  chartType="bar"
+/>
+
+🔹 Grouped Column
+<SurveyChart
+  data={surveyData}
+  title="Responses by Year"
+  groupBy={["year"]}
+  pivotBy="response"
+  chartType="groupedColumn"
+/>
+
+🔹 Stacked Column
+<SurveyChart
+  data={surveyData}
+  title="Question & Year Split"
+  groupBy={["questionId", "year"]}
+  pivotBy="response"
+  chartType="stackedColumn"
+/>
