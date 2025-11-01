@@ -1,338 +1,98 @@
-📝 Prompt: Add Metadata to Survey Domain & Implement Analytics API
-
-You are working on a Spring Boot + MongoDB survey application.
-We need to enhance the domain model to support metadata-driven survey analytics and create a new analytics API.
-
-1. Domain Model Updates
-SurveyTemplate
-
-Each Question should have:
-
-questionId
-
-text
-
-type (RADIO, CHECKBOX, TEXT)
-
-metadata → Map<String, String> (e.g., { "theme": "Communication", "riskTag": "Clarity" })
-
-options → List of Option
-
-Option
-
-Fields:
-
-id
-
-text
-
-metadata → Map<String, String> (e.g., { "category": "Agree", "sentiment": "Positive", "weight": "2" })
-
-👉 This ensures categories, sentiments, weights, or any future attribute can be defined per template.
-
-2. DTOs for Analytics API
-
-Create DTOs under web.dto.analytics package:
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class SurveyAnalyticsResponse {
-    private String surveyId;
-    private List<QuestionAnalyticsDTO> questions;
+interface ChartQuery {
+  data: any[];
+  groupBy: string[];          // dimensions for grouping (x-axis)
+  pivotBy?: string;           // field for series (like 'response')
+  valueField?: string;        // numeric field (optional)
+  aggFunc?: "sum" | "count";  // default: 'count'
+  filters?: Record<string, any>;
 }
 
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class QuestionAnalyticsDTO {
-    private String questionId;
-    private String questionText;
-    private String type;
-    private Map<String, String> metadata; // from template
-    private List<OptionDistributionDTO> distribution; // raw option counts
-    private Map<String, List<GenericAggregationDTO>> rollups; // e.g. category, sentiment
-    private Map<String, List<DimensionGroupDTO>> dimensionRollups; // e.g. region, title
-}
+export function getChartData({
+  data,
+  groupBy,
+  pivotBy,
+  valueField,
+  aggFunc = "count",
+  filters = {},
+}: ChartQuery) {
+  // 1️⃣ Filter data
+  let filtered = data;
+  if (Object.keys(filters).length > 0) {
+    filtered = data.filter((row) =>
+      Object.entries(filters).every(([key, value]) =>
+        Array.isArray(value) ? value.includes(row[key]) : row[key] === value
+      )
+    );
+  }
 
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class OptionDistributionDTO {
-    private String optionId;
-    private String optionText;
-    private long count;
-}
+  // 2️⃣ Aggregate (count if no valueField)
+  const grouped = new Map<string, any>();
 
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class GenericAggregationDTO {
-    private String key;
-    private long count;
-}
+  filtered.forEach((row) => {
+    const groupKey = groupBy.map((g) => row[g]).join("|");
+    const pivotKey = pivotBy ? row[pivotBy] : "_total";
+    const mapKey = `${groupKey}|${pivotKey}`;
 
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class DimensionGroupDTO {
-    private String key; // region/title value
-    private long totalRespondents;
-    private Map<String, List<GenericAggregationDTO>> rollups; // rollups inside each dimension
-}
-
-3. Analytics API Endpoint
-
-Create a new controller SurveyAnalyticsController:
-
-@RestController
-@RequestMapping("/api/surveys/{surveyId}/analytics")
-@RequiredArgsConstructor
-public class SurveyAnalyticsController {
-
-    private final SurveyAnalyticsService surveyAnalyticsService;
-
-    @GetMapping
-    public SurveyAnalyticsResponse getAnalytics(
-            @PathVariable String surveyId,
-            @RequestParam(required = false) List<String> rollups,     // e.g. category,sentiment
-            @RequestParam(required = false) List<String> dimensions, // e.g. region,title
-            @RequestParam(defaultValue = "QUESTION") String level     // QUESTION, THEME, ALL
-    ) {
-        return surveyAnalyticsService.getSurveyAnalytics(surveyId, rollups, dimensions, level);
+    if (!grouped.has(mapKey)) {
+      const base: any = {};
+      groupBy.forEach((g) => (base[g] = row[g]));
+      base.seriesKey = pivotKey;
+      base.value = 0;
+      grouped.set(mapKey, base);
     }
-}
 
-4. Service Layer
-
-SurveyAnalyticsService should:
-
-Fetch the SurveyTemplate for the survey (to read metadata).
-
-Fetch all SurveyResponses for that survey.
-
-Perform aggregations:
-
-Raw distribution → count per optionId
-
-rollups → map optionIds to metadata keys (category, sentiment, etc.) and sum
-
-dimensionRollups → enrich assignees with RDH metadata (region, title) and group counts
-
-Return in the SurveyAnalyticsResponse structure.
-
-5. Example API Call
-GET /api/surveys/6501a1/analytics?rollups=category,sentiment&dimensions=region,title&level=QUESTION
-
-
-Response Example
-
-{
-  "surveyId": "6501a1",
-  "questions": [
-    {
-      "questionId": "q1",
-      "questionText": "The project plan was clear.",
-      "type": "RADIO",
-      "metadata": { "theme": "Communication" },
-      "distribution": [
-        { "optionId": "1", "optionText": "Strongly Disagree", "count": 5 },
-        { "optionId": "2", "optionText": "Disagree", "count": 10 },
-        { "optionId": "3", "optionText": "Neutral", "count": 8 },
-        { "optionId": "4", "optionText": "Agree", "count": 20 },
-        { "optionId": "5", "optionText": "Strongly Agree", "count": 7 }
-      ],
-      "rollups": {
-        "category": [
-          { "key": "Disagree", "count": 15 },
-          { "key": "Neutral", "count": 8 },
-          { "key": "Agree", "count": 27 }
-        ],
-        "sentiment": [
-          { "key": "Negative", "count": 15 },
-          { "key": "Positive", "count": 27 }
-        ]
-      },
-      "dimensionRollups": {
-        "region": [
-          {
-            "key": "APAC",
-            "totalRespondents": 20,
-            "rollups": {
-              "category": [
-                { "key": "Disagree", "count": 7 },
-                { "key": "Neutral", "count": 5 },
-                { "key": "Agree", "count": 8 }
-              ]
-            }
-          }
-        ]
-      }
+    const entry = grouped.get(mapKey);
+    if (aggFunc === "count" || !valueField) {
+      entry.value += 1; // count records
+    } else if (aggFunc === "sum") {
+      entry.value += Number(row[valueField]) || 0;
     }
-  ]
-}
+  });
 
+  const rows = Array.from(grouped.values());
 
-✅ With this prompt, Copilot will:
-
-Add metadata fields to Question and Option in domain.
-
-Create DTOs for analytics response.
-
-Implement SurveyAnalyticsController + SurveyAnalyticsService.
-
-Generate generic analytics responses (raw, rollup, dimension-based).
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-📝 Prompt: Add Survey Summary Inline to Existing APIs
-
-You are working on a Spring Boot + MongoDB survey application.
-Currently, you have the following collections/entities:
-
-Survey → holds survey metadata (code, name, deadline, assignments, etc.)
-
-SurveyResponse → holds per-user responses
-
-SurveyTemplate → holds template & questions
-
-Now we want to add a summary field inline in Survey and return it as part of existing APIs (no separate summary API).
-
-🔎 Required Changes
-1. Update Domain Model
-
-In Survey entity (Mongo document):
-
-@Document("surveys")
-public class Survey {
-    private String id;
-    private String code;
-    private String name;
-    private Instant deadline;
-    private List<Assignment> assignments;
-    private SurveySummary summary; // new field
-}
-
-
-Add new class:
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class SurveySummary {
-    private String content;     // AI-generated summary text
-    private String sentiment;   // Positive, Negative, Neutral, Mixed
-    private Instant generatedAt;
-}
-
-2. Update DTOs
-
-In SurveyDTO and SurveyDetailDTO (or whatever DTOs you expose in web layer):
-
-public class SurveyDTO {
-    private String id;
-    private String code;
-    private String name;
-    private Instant deadline;
-    private SurveySummaryDTO summary; // add summary here
-}
-
-public class SurveySummaryDTO {
-    private String content;
-    private String sentiment;
-    private Instant generatedAt;
-}
-
-3. Update Mappers
-
-Update your SurveyMapper to map Survey.summary → SurveySummaryDTO.
-
-4. Update APIs
-
-No new endpoints are required. Just ensure:
-
-GET /api/surveys → returns survey list with summary field.
-
-GET /api/surveys/{id} → returns survey detail with summary field.
-
-Example Response for list:
-
-[
-  {
-    "id": "6501a1",
-    "code": "SURV-2025-001",
-    "name": "Audit Survey - Project Alpha",
-    "deadline": "2025-11-15T00:00:00Z",
-    "summary": {
-      "content": "Most respondents agreed planning was clear, but deadlines remain a recurring concern.",
-      "sentiment": "Mixed",
-      "generatedAt": "2025-10-22T08:30:00Z"
+  // 3️⃣ Build hierarchical categories
+  const hierarchy: Record<string, any> = {};
+  for (const r of rows) {
+    let level = hierarchy;
+    for (let i = 0; i < groupBy.length; i++) {
+      const key = r[groupBy[i]];
+      if (!level[key]) level[key] = { _children: {} };
+      level = level[key]._children;
     }
   }
-]
 
-
-Example Response for detail:
-
-{
-  "id": "6501a1",
-  "code": "SURV-2025-001",
-  "name": "Audit Survey - Project Alpha",
-  "deadline": "2025-11-15T00:00:00Z",
-  "assignments": [
-    { "assignee": "sjain", "status": "COMPLETED" },
-    { "assignee": "rkumar", "status": "PENDING" }
-  ],
-  "summary": {
-    "content": "Most respondents agreed planning was clear, but deadlines remain a recurring concern.",
-    "sentiment": "Mixed",
-    "generatedAt": "2025-10-22T08:30:00Z"
+  function buildCategories(level: any): any[] {
+    return Object.entries(level).map(([name, val]) => {
+      const children = val._children;
+      return Object.keys(children).length
+        ? { name, categories: buildCategories(children) }
+        : name;
+    });
   }
+
+  const categories = buildCategories(hierarchy);
+
+  // 4️⃣ Flatten unique combinations for category lookup
+  const uniqueCombos = Array.from(
+    new Map(
+      rows.map((r) => [groupBy.map((g) => r[g]).join("|"), groupBy.map((g) => r[g])])
+    ).values()
+  );
+
+  // 5️⃣ Pivot into series
+  const pivotValues = Array.from(new Set(rows.map((r) => r.seriesKey)));
+  const series = pivotValues.map((p) => ({
+    name: p === "_total" ? "Total" : p,
+    data: uniqueCombos.map((combo) => {
+      const match = rows.find(
+        (r) =>
+          r.seriesKey === p &&
+          groupBy.every((g, i) => r[g] === combo[i])
+      );
+      return match ? match.value : 0;
+    }),
+  }));
+
+  return { categories, series };
 }
-
-5. Summary Generation (Background / On Demand)
-
-Summaries should be generated by a service that:
-
-Aggregates survey responses
-
-Calls AI summarization API (Copilot/OpenAI)
-
-Persists the summary in Survey.summary
-
-Regeneration can be triggered on survey close, or manually via admin.
-
-✅ Deliverables
-
-Update Survey entity to include SurveySummary.
-
-Update SurveyDTO and SurveyDetailDTO to expose summary.
-
-Update mappers accordingly.
-
-Ensure existing survey APIs (GET /api/surveys, GET /api/surveys/{id}) return the summary inline.
