@@ -1,4 +1,4 @@
-You are an AI assistant analyzing internal audit survey feedback across multiple teams and years.
+You are an AI assistant analyzing survey feedback across multiple teams and years.
 
 INPUT:
 You will receive a JSON object with an array called "feedback".
