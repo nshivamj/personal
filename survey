@@ -1,686 +1,317 @@
-Perfect, Shivam ✅
-Let’s write this up like a **design decision document**, capturing both possible directions clearly —
-so you (or your team) can compare and decide which to implement going forward.
+You are an AI assistant analyzing internal audit survey feedback across multiple teams and years.
+
+INPUT:
+You will receive a JSON object with an array called "feedback".
+Each feedback item contains:
+- comment_id
+- team
+- year
+- responder_level (optional: Analyst, Associate, VP, MD, PMD)
+- question (optional)
+- comment_text
+
+Your objectives:
+1) Identify GLOBAL THEMES across all feedback.
+2) Classify themes as global strengths or global areas of improvement.
+3) Detect trends across years (new, increasing, decreasing, stable).
+4) Compare each team against the global themes.
+5) Identify team-specific UNIQUE themes.
+6) Produce TOP 2 STRENGTHS and TOP 2 IMPROVEMENTS per team for UI display.
+7) Ensure audit-safe TRACEABILITY using comment_ids and short quotes.
+8) Consider SUPPORT STRENGTH and future-proof RESPONDER LEVEL weighting.
+
+Responder level weighting (if responder_level is present):
+- Analyst / Associate = weight 1
+- VP = weight 2
+- MD / PMD = weight 3
+If responder_level is missing, use weight 1.
+Use weights only to calculate support strength, NOT to change conclusions unpredictably.
+
+IMPORTANT PRINCIPLES:
+- A theme supported by a single comment must be marked LOW confidence.
+- UNIQUE themes are valuable only if they have enough support OR high weighted support.
+- GLOBAL themes must never be lost; they must still appear in per-team comparison.
+- Prefer interpretability, consistency, and defensibility over cleverness.
+- Output VALID JSON ONLY using the schema below (no extra keys).
+
+--------------------------------------------------
+
+TASKS:
+
+1) GLOBAL THEMES (All teams combined)
+- Identify 5–10 clear, non-overlapping global themes.
+- Assign theme_id values: T1, T2, etc.
+- For each theme:
+  - Determine dominant sentiment: "strength", "improvement", or "mixed".
+  - Write a 2–3 sentence description.
+  - Determine trend across years: "new", "increasing", "decreasing", or "stable".
+  - Provide year-wise sentiment stats (approximate).
+  - Calculate global support statistics:
+    • total_comments
+    • distinct_responders (approximate)
+    • unweighted_support_score
+    • weighted_support_score
+    • confidence: "high", "medium", or "low"
+  - Provide representative supporting comment_ids and short quotes (≤20 words).
+
+2) GLOBAL SUMMARY
+- Place each theme into exactly ONE of:
+  - global_summary.strengths
+  - global_summary.improvements
+
+3) PER-TEAM ANALYSIS (for EACH distinct team)
+- For EVERY global theme:
+  - Decide team_status: "strength", "improvement", "mixed", or "not_relevant".
+  - Add a one-sentence team-specific summary.
+  - Compute team-level support_stats (same structure as global).
+  - Include team-specific supporting comment_ids and quotes.
+
+4) TEAM-UNIQUE THEMES
+- For each team, identify up to 3 themes not covered by global themes.
+- For each unique theme:
+  - Assign local_theme_id (TU1, TU2, …).
+  - Mark as "strength" or "improvement".
+  - Provide short explanation.
+  - Provide support_stats and supporting comments.
+- If a unique theme is supported by only one comment, mark confidence as LOW.
+
+5) TOP INSIGHTS PER TEAM (UI CRITICAL)
+For each team, generate:
+- EXACTLY Top 2 Strengths
+- EXACTLY Top 2 Improvements (if possible)
+
+Selection rules:
+- Consider both global themes and unique themes.
+- Prefer higher weighted_support_score and higher confidence.
+- Prefer global themes when the team strongly deviates from global baseline.
+- Use unique themes ONLY when:
+  • More than one responder supports them, OR
+  • Weighted support is high (senior responders), OR
+  • No strong global theme exists.
+- If a low-sample theme is selected, tag it clearly.
+
+For each selected insight:
+- Provide a UI-ready summary_statement (clear, neutral, 1–2 sentences).
+- Indicate whether it is global or unique.
+- Add reasoning_tags (examples: "globally_relevant", "team_specific", "high_support", "low_sample_size").
+- Provide support_stats and supporting comment_ids.
+
+--------------------------------------------------
+
+OUTPUT JSON SCHEMA (STRICT):
 
----
-
-# 🧩 **Design Decision: Handling BP Convergence and OU–BP Mapping**
-
----
-
-## **Background**
-
-We currently maintain:
-
-* **BP table** → stores existing “legacy” BPs (around 250 today).
-* **OU table** → organizational units.
-* **OU_BP table** → maps OUs to BPs.
-* **Projects** → store both OU and BP codes directly (freezing the historical linkage at project creation).
-
-Now, we are introducing **new “form-wide” BPs** and **new OU taxonomy**.
-Old BPs and OUs will remain only for historical data.
-New BPs and OUs will represent the active, forward-looking model.
-
-We have two possible directions for maintaining these relationships:
-
----
-
-## **Option 1 — Extend the Existing Relational Model (Uplifted Model)**
-
-### 🏗️ **Model Overview**
-
-Keep your current relational model structure and extend it to support new “form-wide” BPs and OU–BP mappings.
-
-**Tables involved:**
-
-* `BP` → extended to include both old and new BPs
-* `OU` → extended to include both old and new OUs (once convergence happens)
-* `OU_BP` → continue using it as the mapping table
-* `Project` → keeps frozen OU–BP mapping from creation
-
-### 📋 **Changes Needed**
-
-1. **BP table**
-
-   ```sql
-   BP (
-     bp_id BIGINT PRIMARY KEY,
-     bp_code VARCHAR,
-     bp_name VARCHAR,
-     is_form_wide BOOLEAN,
-     lifecycle_status ENUM('Active','Inactive','Superseded'),
-     created_at TIMESTAMP,
-     updated_at TIMESTAMP
-   )
-   ```
-
-   * Insert new “form-wide” BPs with `is_form_wide = true, lifecycle_status = 'Active'`.
-   * Mark old BPs as `lifecycle_status = 'Superseded'`.
-
-2. **OU_BP table**
-
-   * **Option A (current truth only)**
-
-     * Overwrite old mappings (OU → old BP) with new ones (OU → new BP).
-     * OU_BP represents only **current mappings**.
-     * Historical truth remains frozen in `Project`.
-   * **Option B (keep lineage)**
-
-     * Add `valid_from` / `valid_to` columns.
-     * Close old OU→BP rows and insert new OU→BP rows.
-     * OU_BP carries full mapping lineage.
-
-3. **BP_Supersession table (optional but recommended)**
-
-   ```sql
-   BP_Supersession (
-     from_bp_id BIGINT,
-     to_bp_id BIGINT,
-     effective_from DATE,
-     effective_to DATE NULL,
-     reason VARCHAR
-   )
-   ```
-
-   * Maintains lineage (e.g., BP_India → BP_Global).
-
-4. **Project table**
-
-   * No changes — it already freezes OU and BP codes historically.
-
----
-
-### ✅ **Pros**
-
-* Simple to implement; minimal migration effort.
-* Relational integrity (FKs, constraints, joins).
-* Easy for existing consumers (no API or schema overhaul).
-* High performance for current and historical queries.
-* Projects already handle historical mapping, so OU_BP can stay simple.
-
-### ❌ **Cons**
-
-* Every future convergence (BP, OU, etc.) → schema evolution and migrations.
-* OU_BP without validity windows can’t represent temporal lineage directly.
-* If OUs also change, relational may get complex to maintain multiple generations.
-* Doesn’t scale gracefully to multiple taxonomy versions (each wave needs updates).
-
----
-
-### ⚙️ **Recommended if**
-
-* You want **minimal disruption** now.
-* Projects always freeze historical mappings (you don’t need OU_BP history).
-* You’ll have **1–2 convergence waves only**, not frequent taxonomy changes.
-
----
-
-## **Option 2 — Move to EAV / EAB Model**
-
-### 🏗️ **Model Overview**
-
-Adopt a **generic entity model** where BPs, OUs, and their mappings are represented as **entities, attributes, and relationships**, rather than fixed tables.
-
-**Core tables:**
-
-* `Entity_Node`
-* `Entity_Attr_Def`
-* `Entity_Attr_Val`
-* `Entity_Relationship`
-
-### 📋 **Structure**
-
-#### 1. Entity_Node
-
-Holds all entities (BPs, OUs, Projects, etc.)
-
-| node_id | entity_type | entity_code   | name         | status     | is_form_wide | valid_from | valid_to   |
-| ------- | ----------- | ------------- | ------------ | ---------- | ------------ | ---------- | ---------- |
-| 101     | BP          | BP_India      | Legacy BP    | Superseded | false        | 2020-01-01 | 2024-12-31 |
-| 201     | BP          | BP_Global     | Form-wide BP | Active     | true         | 2025-01-01 | NULL       |
-| 301     | OU          | OU_North      | Legacy OU    | Superseded | false        | 2020-01-01 | 2024-12-31 |
-| 401     | OU          | OU_Enterprise | New OU       | Active     | true         | 2025-01-01 | NULL       |
-
----
-
-#### 2. Entity_Relationship
-
-Stores relationships between nodes, each with validity.
-
-| rel_id | from_node_id | to_node_id | relationship_type | valid_from | valid_to   |
-| ------ | ------------ | ---------- | ----------------- | ---------- | ---------- |
-| 1      | 101          | 201        | SUPERSEDED_BY     | 2025-01-01 | NULL       |
-| 2      | 301          | 401        | SUPERSEDED_BY     | 2025-01-01 | NULL       |
-| 3      | 401          | 201        | OU_MAPPED_TO_BP   | 2025-01-01 | NULL       |
-| 4      | 301          | 101        | OU_MAPPED_TO_BP   | 2020-01-01 | 2024-12-31 |
-
----
-
-#### 3. Entity_Attr_Val
-
-Stores attributes per entity (dynamic fields, configurations, metadata, etc.)
-
-| entity_node_id | attr_id | attr_name | value  | valid_from | valid_to   | business_state |
-| -------------- | ------- | --------- | ------ | ---------- | ---------- | -------------- |
-| 101            | 10      | BP_REGION | APAC   | 2020-01-01 | 2024-12-31 | Approved       |
-| 201            | 10      | BP_REGION | GLOBAL | 2025-01-01 | NULL       | Approved       |
-
----
-
-### ✅ **Pros**
-
-* Unified model for all entities (BP, OU, future OU types).
-* Handles **continuous convergence** waves without schema changes.
-* Rich lineage and “as-of” queries via relationship validity.
-* Flexible: new OU/BP attributes added via metadata (no DB changes).
-* Ready for future taxonomy changes (e.g., OUv3, BPv3).
-
-### ❌ **Cons**
-
-* More complex to query and maintain.
-* Recursive queries for lineage and “as-of” lookups can be slower.
-* Referential integrity weaker (hard to enforce strict FKs).
-* Requires governance and standardized APIs to hide EAV complexity from consumers.
-* Higher upfront migration effort (move BP, OU, OU_BP into EAV).
-
----
-
-### ⚙️ **Recommended if**
-
-* You expect **frequent taxonomy or convergence changes** (new OUs, new BP waves).
-* You want a **single extensible model** for everything (BPs, OUs, Projects, etc.).
-* You already use EAB for other domains and want consistency.
-* You’re building an **API/service layer** that can abstract EAV complexity from consumers.
-
----
-
-## **Comparison Summary**
-
-| Criteria                                   | Option 1: Extended Relational  | Option 2: EAV / EAB Model             |
-| ------------------------------------------ | ------------------------------ | ------------------------------------- |
-| **Ease of Implementation**                 | ✅ Simple                       | ❌ Complex                             |
-| **Migration Effort**                       | Low                            | High                                  |
-| **Performance**                            | High                           | Moderate                              |
-| **Integrity (FKs, constraints)**           | Strong                         | Weaker                                |
-| **Flexibility / Evolvability**             | Low–Medium                     | ✅ Very High                           |
-| **Supports OU & BP convergence**           | Manual schema changes          | ✅ Natural (relationships, attributes) |
-| **Lineage tracking**                       | Requires BP_Supersession table | ✅ Native in relationships             |
-| **As-of queries**                          | Needs validity fields          | ✅ Built-in with valid_from/valid_to   |
-| **Governance / audit readiness**           | Moderate                       | ✅ Excellent                           |
-| **Consumer simplicity**                    | ✅ Easy joins                   | ❌ Needs API abstraction               |
-| **Future-proofing for more OU/BP changes** | ❌ Limited                      | ✅ Strong                              |
-
----
-
-## 🏁 **Final Recommendation**
-
-| Situation                                         | Recommended Approach                            |
-| ------------------------------------------------- | ----------------------------------------------- |
-| OU structure stable, one-time BP convergence      | **Option 1: Relational Uplift**                 |
-| OU also converging soon, future evolutions likely | **Option 2: EAV / EAB**                         |
-| Need fast delivery + later extensibility          | Hybrid → Option 1 now, evolve to Option 2 later |
-
----
-
-## ⚙️ **Hybrid (Transitional) Path**
-
-If your team wants to go EAB eventually but needs a smooth migration:
-
-1. **Short term (current wave):**
-
-   * Keep relational tables (`BP`, `OU`, `OU_BP`).
-   * Insert new BPs/OUs there and mark old ones inactive.
-   * Use OU_BP = *current mapping only*.
-2. **Parallel:**
-
-   * Start creating `Entity_Node`, `Entity_Relationship`, `Entity_Attr_Val` in your EAB.
-   * Mirror BPs and OUs (both old + new) into EAB for lineage capture.
-3. **Later:**
-
-   * Decommission relational tables once all consumers move to EAB-based APIs.
-
----
-
-Would you like me to write this as a **ready-to-share design doc** (formatted as a Confluence or architecture decision record with headings like “Context”, “Options Considered”, “Decision”, “Consequences”)? It’ll be easy to present to your team or architects.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Excellent follow-up, Shivam 🔥 — this is exactly the right question to ask **before committing to EAV**.
-
-You’re essentially asking:
-
-> “If I move BP and OU into the EAV model, and I query for a BP entity (or an OU–BP relationship), what does my response look like?
-> Will I get historical mappings, attributes, and their validities all together — and how will that data be structured?”
-
-Let’s go step by step and visualize what happens in your **EAV-based design** when you query for a **Business Partner Entity (BPE)** or OU–BP relationships.
-
----
-
-## 🧩 1. Conceptual Layout Recap
-
-In your EAV (Entity–Attribute–Value) / EAB model:
-
-| Table                   | Role                                                                        |
-| ----------------------- | --------------------------------------------------------------------------- |
-| **Entity_Node**         | Core “thing” — BP, OU, Project, etc.                                        |
-| **Entity_Attr_Val**     | Attribute values over time (`valid_from`, `valid_to`, `business_state`).    |
-| **Entity_Relationship** | Relationships between entities, also time-aware (`valid_from`, `valid_to`). |
-
----
-
-## 🧠 2. Example Data Setup
-
-### Example scenario
-
-| Entity_Node                  |
-| ---------------------------- |
-| `BP101` – old BP, superseded |
-| `BP201` – new form-wide BP   |
-| `OU301` – old OU             |
-| `OU401` – new OU             |
-
-### Entity_Attr_Val (BP attributes)
-
-| entity_id | attribute_name | value        | valid_from | valid_to   |
-| --------- | -------------- | ------------ | ---------- | ---------- |
-| BP101     | BP_NAME        | “BP India”   | 2020-01-01 | 2024-12-31 |
-| BP101     | STATUS         | “Superseded” | 2025-01-01 | NULL       |
-| BP201     | BP_NAME        | “BP Global”  | 2025-01-01 | NULL       |
-| BP201     | STATUS         | “Active”     | 2025-01-01 | NULL       |
-
-### Entity_Relationship (OU↔BP and BP↔BP)
-
-| from_entity | to_entity | relationship_type | valid_from | valid_to   |
-| ----------- | --------- | ----------------- | ---------- | ---------- |
-| OU301       | BP101     | OU_MAPPED_TO_BP   | 2020-01-01 | 2024-12-31 |
-| OU401       | BP201     | OU_MAPPED_TO_BP   | 2025-01-01 | NULL       |
-| BP101       | BP201     | SUPERSEDED_BY     | 2025-01-01 | NULL       |
-| OU301       | OU401     | SUPERSEDED_BY     | 2025-01-01 | NULL       |
-
----
-
-## 💡 3. Query Types & Example Responses
-
-Let’s imagine you have an API or query for:
-
-### **A) “Get BP Entity with attributes and relationships (historical + current)”**
-
-If you query for `BP101`, the response from your EAV service could look like this:
-
-```json
 {
-  "entity_code": "BP101",
-  "entity_type": "BP",
-  "attributes": [
+  "global_summary": {
+    "strengths": [
+      {
+        "theme_id": "T1",
+        "theme_name": "Short theme title",
+        "description": "2–3 sentence explanation.",
+        "trend": "new | increasing | decreasing | stable",
+        "year_stats": [
+          {
+            "year": 2024,
+            "total_comments": 0,
+            "positive_pct": 0,
+            "negative_pct": 0,
+            "mixed_pct": 0
+          }
+        ],
+        "support_stats_global": {
+          "total_comments": 0,
+          "distinct_responders": 0,
+          "unweighted_support_score": 0,
+          "weighted_support_score": 0,
+          "confidence": "high | medium | low"
+        },
+        "supporting_comments": {
+          "comment_ids": [],
+          "sample_quotes": []
+        }
+      }
+    ],
+    "improvements": []
+  },
+  "per_team_summaries": [
     {
-      "name": "BP_NAME",
-      "value": "BP India",
-      "valid_from": "2020-01-01",
-      "valid_to": "2024-12-31"
-    },
-    {
-      "name": "STATUS",
-      "value": "Superseded",
-      "valid_from": "2025-01-01",
-      "valid_to": null
+      "team_name": "Team Name",
+      "themes_vs_global": [
+        {
+          "theme_id": "T1",
+          "theme_name": "Theme name",
+          "team_status": "strength | improvement | mixed | not_relevant",
+          "short_summary": "1 sentence summary",
+          "support_stats_team": {
+            "total_comments": 0,
+            "distinct_responders": 0,
+            "unweighted_support_score": 0,
+            "weighted_support_score": 0,
+            "confidence": "high | medium | low"
+          },
+          "supporting_comments": {
+            "comment_ids": [],
+            "sample_quotes": []
+          }
+        }
+      ],
+      "team_unique_themes": [
+        {
+          "local_theme_id": "TU1",
+          "theme_name": "Unique theme name",
+          "type": "strength | improvement",
+          "short_summary": "Short explanation",
+          "support_stats_team": {
+            "total_comments": 0,
+            "distinct_responders": 0,
+            "unweighted_support_score": 0,
+            "weighted_support_score": 0,
+            "confidence": "high | medium | low"
+          },
+          "supporting_comments": {
+            "comment_ids": [],
+            "sample_quotes": []
+          }
+        }
+      ],
+      "team_top_insights": {
+        "top_strengths": [
+          {
+            "source": "global_theme | team_unique_theme",
+            "theme_id": "T1 or TU1",
+            "theme_name": "Theme name",
+            "summary_statement": "UI-ready insight statement.",
+            "reasoning_tags": [],
+            "support_stats": {
+              "total_comments": 0,
+              "distinct_responders": 0,
+              "unweighted_support_score": 0,
+              "weighted_support_score": 0,
+              "confidence": "high | medium | low"
+            },
+            "supporting_comments": {
+              "comment_ids": [],
+              "sample_quotes": []
+            }
+          }
+        ],
+        "top_improvements": []
+      }
     }
   ],
-  "relationships": [
-    {
-      "type": "SUPERSEDED_BY",
-      "to_entity": "BP201",
-      "valid_from": "2025-01-01",
-      "valid_to": null
-    },
-    {
-      "type": "OU_MAPPED_TO_BP",
-      "from_entity": "OU301",
-      "valid_from": "2020-01-01",
-      "valid_to": "2024-12-31"
-    }
-  ]
+  "meta": {
+    "total_comments": 0,
+    "total_teams": 0,
+    "years_covered": []
+  }
 }
-```
 
-This shows:
 
-* Historical attributes (validity windows)
-* Relationships to OUs and successor BPs
-* You can see **lineage** and **historical context** right in the same response.
 
----
 
-### **B) “Get current state only (as of date)”**
 
-You might query:
 
-```
-GET /entity/BP101?asOf=2023-06-30
-```
 
-Response:
 
-```json
-{
-  "entity_code": "BP101",
-  "entity_type": "BP",
-  "attributes": [
-    { "BP_NAME": "BP India" },
-    { "STATUS": "Active" }
-  ],
-  "relationships": [
-    { "OU_MAPPED_TO_BP": "OU301" }
-  ]
-}
-```
 
-→ Your resolver would filter `valid_from <= asOf <= valid_to OR valid_to IS NULL`.
+
+
+
+
+
+
+
+
+That’s your “master” analysis prompt.
 
 ---
 
-### **C) “Get full lineage of a BP (old to new)”**
-
-```
-GET /entity/BP101/lineage
-```
-
-Response:
-
-```json
-{
-  "chain": [
-    { "bp_code": "BP101", "status": "Superseded" },
-    { "bp_code": "BP201", "status": "Active" }
-  ]
-}
-```
-
----
-
-### **D) “Get OU–BP mapping history”**
-
-```
-GET /relationship/OU_MAPPED_TO_BP?ou=OU301
-```
-
-Response:
-
-```json
-{
-  "ou_code": "OU301",
-  "mappings": [
-    {
-      "bp_code": "BP101",
-      "valid_from": "2020-01-01",
-      "valid_to": "2024-12-31"
-    },
-    {
-      "bp_code": "BP201",
-      "valid_from": "2025-01-01",
-      "valid_to": null
-    }
-  ]
-}
-```
-
-✅ So yes — your EAV model **natively returns both historical and current mappings** along with each entity’s own attributes and status.
-
----
-
-## 🧠 4. How this is powered
-
-Your query layer (or service) will:
-
-1. Read the **Entity_Node** for the base identity.
-2. Join **Entity_Attr_Val** (with filters if `asOfDate` given).
-3. Join **Entity_Relationship** for both directions (`from_entity` and `to_entity`).
-4. Optionally resolve recursively if you want lineage (follow `SUPERSEDED_BY` links).
-
----
-
-## 🧩 5. What makes this powerful
-
-* You don’t hardcode any BP or OU structure.
-* The same response shape works for:
-
-  * BP → OU mappings
-  * OU → BP mappings
-  * OU → OU convergence
-  * BP → BP supersession
-* The response is **time-aware** by default.
-
----
-
-## ⚙️ 6. Example Query Scenarios
-
-| Scenario                          | Input           | Output (EAV resolver logic)                            |
-| --------------------------------- | --------------- | ------------------------------------------------------ |
-| Get **current BP details**        | BP201           | Active attributes and current OU relationships         |
-| Get **historical OU→BP mappings** | OU301           | Both old and new BPs with valid_from/to                |
-| Get **BP lineage**                | BP101           | Chain of supersession relationships                    |
-| Get **All BPs as of 2022**        | asOf=2022-12-31 | Filter Entity_Attr_Val and Relationships by date range |
-
----
-
-## ✅ 7. Summary of “Response Behavior” in EAV
-
-| Aspect                 | Behavior                                                                                 |
-| ---------------------- | ---------------------------------------------------------------------------------------- |
-| **Attributes**         | Returned with validity and state (can filter by as-of date).                             |
-| **Relationships**      | Returned with validity (can filter as-of or include all).                                |
-| **Lineage**            | Naturally captured through relationships (SUPERSEDED_BY).                                |
-| **Historical data**    | Always present (valid_from/to range).                                                    |
-| **As-of queries**      | Simple filter: `valid_from <= asOf <= valid_to OR valid_to IS NULL`.                     |
-| **Response structure** | Generic JSON: `entity_type`, `attributes`, `relationships`, each with validity metadata. |
-
----
-
-✅ **In short:**
-If you implement your BP + OU model inside your EAV, your **response for any entity (BP or OU)** can:
-
-* Include all current attributes
-* Include all historical attributes with validity
-* Include all relationships (OU–BP, BP–BP, OU–OU)
-* Include supersession lineage
-* Support “as-of” queries naturally
-
-All of this in one unified, versioned, metadata-rich structure.
-
----
-
-Would you like me to show how your **EAV resolver service API** (say in Spring Boot) could structure these responses dynamically (with filters for “as-of”, “includeLineage”, etc.)? That would show how the runtime system builds this response shape.
-
-
-
-
-
-
-
-
-
-
-
-
-Perfect 👌 that simplifies your roadmap significantly, Shivam.
-
-Since your **EAV APIs and model are already in place**, your main scope now is **data migration + UI uplift + downstream enablement** — not re-engineering.
-
-Here’s a **refined, practical Book of Work (BoW)** tailored exactly for that situation.
-
----
-
-# 📘 **Book of Work: EAV Migration & UI Uplift**
-
-## 🎯 **Objective**
-
-Migrate all existing **BP / OU / OU–BP mappings** from the legacy relational taxonomy model into the **new EAV model**,
-establish lineage between old and new entities, uplift the UI to support the new structure, and enable downstream applications and the Data Lake team to consume data from the new model.
-
----
-
-## 🧩 **Workstreams Overview**
-
-| Workstream                   | Description                                                                                                            |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **1. Data Migration**        | Move data from existing relational model (BP, OU, OU_BP) into EAV (Entity_Node, Entity_Attr_Val, Entity_Relationship). |
-| **2. Lineage Setup**         | Build relationships between old and new BPs / OUs (e.g., `SUPERSEDED_BY`, `OU_MAPPED_TO_BP`).                          |
-| **3. Downstream Enablement** | Coordinate with downstream applications and Data Lake teams to start reading data from the EAV model.                  |
-| **4. UI Uplift**             | Enhance UI for managing and visualizing new OU/BP entities, lineage, and relationships.                                |
-| **5. Validation & Cutover**  | Validate data parity, lineage correctness, downstream readiness, and freeze old relational sources.                    |
-
----
-
-## 🪜 **Detailed Milestones**
-
-### **Phase 1 – Preparation & Mapping Definition (Week 1–2)**
-
-| #   | Task                            | Description                                                                                       | Owner                        |
-| --- | ------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------- |
-| 1.1 | **Inventory Existing Data**     | Extract current BP, OU, and OU_BP data from relational sources.                                   | Data Eng                     |
-| 1.2 | **Define Mapping Rules**        | Define mapping between old relational schema and new EAV entities, attributes, and relationships. | Architecture + Data Modeling |
-| 1.3 | **Define Lineage Rules**        | Identify old→new BP and OU relationships (`SUPERSEDED_BY`) and prepare lineage input files.       | Taxonomy / SME               |
-| 1.4 | **Create Migration Templates**  | Prepare templates (CSV/Excel) for `Entity_Node`, `Entity_Attr_Val`, `Entity_Relationship`.        | Data Eng                     |
-| 1.5 | **Coordinate with Downstreams** | Inform downstreams about planned migration timeline and data switch.                              | PM / Integration             |
-
-**Deliverables:**
-
-* Mapping document (Relational → EAV).
-* Lineage definition sheet (OldBP → NewBP, OldOU → NewOU).
-* Migration templates ready.
-
----
-
-### **Phase 2 – Data Migration Execution (Week 3–5)**
-
-| #   | Task                           | Description                                                                                        | Owner           |
-| --- | ------------------------------ | -------------------------------------------------------------------------------------------------- | --------------- |
-| 2.1 | **Load BPs into EAV**          | Create EAV `Entity_Node` entries for all old & new BPs.                                            | Data Eng        |
-| 2.2 | **Load OUs into EAV**          | Create EAV `Entity_Node` entries for all OUs (old + new).                                          | Data Eng        |
-| 2.3 | **Load OU–BP Mappings**        | Insert `Entity_Relationship` entries of type `OU_MAPPED_TO_BP`.                                    | Data Eng        |
-| 2.4 | **Load Lineage Relationships** | Insert `Entity_Relationship` of type `SUPERSEDED_BY` for BP–BP and OU–OU pairs.                    | Data Eng        |
-| 2.5 | **Populate Attributes**        | Insert key BP/OU attributes (`status`, `is_form_wide`, `valid_from`, etc.) into `Entity_Attr_Val`. | Data Eng        |
-| 2.6 | **Validation**                 | Compare counts, spot-check attributes, lineage, and mappings with legacy tables.                   | QA + Governance |
-| 2.7 | **Migration Report**           | Generate migration summary: # of BPs, # of OUs, # of relationships loaded.                         | Data Eng        |
-
-**Deliverables:**
-
-* Fully populated EAV model for BP, OU, and mappings.
-* Validation & reconciliation report.
-
----
-
-### **Phase 3 – Downstream Integration Enablement (Week 6–7)**
-
-| #   | Task                                 | Description                                                                         | Owner          |
-| --- | ------------------------------------ | ----------------------------------------------------------------------------------- | -------------- |
-| 3.1 | **Downstream App 1 (New BPs Only)**  | Switch to EAV API `/entities?type=BP&status=Active`. Validate outputs.              | Downstream 1   |
-| 3.2 | **Downstream App 2 (Old + New BPs)** | Use EAV API `/entities?type=BP&includeHistory=true` to get both sets with statuses. | Downstream 2   |
-| 3.3 | **Data Lake Consumption**            | Modify ingestion to pull BPs/OUs/relationships from EAV tables or API.              | Data Lake Eng  |
-| 3.4 | **Data Validation**                  | Cross-check downstream and EAV data parity.                                         | QA / Data Lake |
-
-**Deliverables:**
-
-* Both downstream systems reading from EAV APIs.
-* Data Lake updated to EAV source.
-* Validation sign-off.
-
----
-
-### **Phase 4 – UI Uplift (Week 8–10)**
-
-| #   | Task                            | Description                                                         | Owner              |
-| --- | ------------------------------- | ------------------------------------------------------------------- | ------------------ |
-| 4.1 | **Design EAV Management UI**    | Extend existing taxonomy UI to handle EAV entities (BP, OU).        | UI/UX              |
-| 4.2 | **Implement Entity List View**  | Show BPs and OUs (old/new, active/inactive) from EAV API.           | Frontend           |
-| 4.3 | **Implement Relationship View** | Display OU→BP mappings and lineage graph (old→new).                 | Frontend           |
-| 4.4 | **Enable CRUD Operations**      | Allow creation, update, deactivation of entities and relationships. | Frontend + Backend |
-| 4.5 | **UAT Testing**                 | Verify UI correctness for lineage, validity, and relationships.     | QA + Business      |
-
-**Deliverables:**
-
-* New UI for managing OU–BP and lineage in EAV.
-* Visualization for old→new entity relationships.
-
----
-
-### **Phase 5 – Final Validation & Cutover (Week 11–12)**
-
-| #   | Task                             | Description                                                         | Owner              |
-| --- | -------------------------------- | ------------------------------------------------------------------- | ------------------ |
-| 5.1 | **Parallel Run**                 | Keep relational + EAV data in sync for 1 week to monitor stability. | Data Eng           |
-| 5.2 | **Downstream Readiness Check**   | Validate that all downstreams have switched to EAV APIs.            | Integration / QA   |
-| 5.3 | **Freeze Legacy Model**          | Stop updates to relational tables (BP, OU, OU_BP).                  | DBA                |
-| 5.4 | **Finalize EAV Model Ownership** | Move operational ownership to Taxonomy / EAV maintenance team.      | Architecture / Ops |
-| 5.5 | **Publish Documentation**        | Update data dictionary, API docs, lineage diagrams.                 | Tech Writer / PM   |
-
-**Deliverables:**
-✅ Data migration complete
-✅ Downstreams consuming EAV
-✅ UI live
-✅ Relational model frozen
-
----
-
-## 📊 **Timeline Summary**
-
-| Phase                    | Duration | Key Output                   |
-| ------------------------ | -------- | ---------------------------- |
-| 1. Planning & Mapping    | 2 weeks  | Mapping & lineage spec ready |
-| 2. Migration Build       | 3 weeks  | Data loaded into EAV         |
-| 3. Downstream Enablement | 2 weeks  | Downstreams switched         |
-| 4. UI Uplift             | 3 weeks  | New UI live                  |
-| 5. Cutover               | 2 weeks  | Legacy frozen                |
-
-**Total Duration:** ~10–12 weeks
-
----
-
-## 📈 **Deliverables by Stakeholder**
-
-| Team                      | Key Responsibilities                               |
-| ------------------------- | -------------------------------------------------- |
-| **Data Engineering**      | Extract relational data, load into EAV, validation |
-| **Taxonomy / Domain SME** | Define lineage mappings (old→new)                  |
-| **Backend / API Team**    | Support new data model queries for downstreams     |
-| **Downstream Teams**      | Update API integrations                            |
-| **Data Lake Team**        | Modify ingestion & reporting logic                 |
-| **UI/UX Team**            | Implement and test new management UI               |
-| **QA / Data Governance**  | Validate migration, lineage, and data accuracy     |
-
----
-
-## 🚦 **Risks & Mitigations**
-
-| Risk                                         | Impact | Mitigation                                               |
-| -------------------------------------------- | ------ | -------------------------------------------------------- |
-| Data mismatch during migration               | Medium | Validation script to reconcile record counts and lineage |
-| Downstream teams delay switching to new APIs | High   | Maintain parallel feeds for 1 sprint                     |
-| UI delays                                    | Medium | Deliver read-only lineage visualization first            |
-| Data Lake pipeline complexity                | Medium | Conduct early integration testing                        |
-| Ownership confusion post cutover             | Low    | Assign EAV ownership in governance doc                   |
-
----
-
-## ✅ **Success Criteria**
-
-* ✅ All BPs, OUs, and OU–BP mappings migrated into EAV model.
-* ✅ Lineage between old and new entities (BP→BP, OU→OU) established.
-* ✅ Both downstream applications reading via EAV APIs.
-* ✅ Data Lake consuming and reporting from new model.
-* ✅ UI live for managing and visualizing taxonomy and lineage.
-* ✅ Legacy relational tables frozen and archived.
-
----
-
-Would you like me to draft this into a **“Project Milestone Tracker Table” (Excel or Confluence-ready format)** with columns for **Milestone, Owner, Target Date, Status, Dependencies** — so you can circulate it in your next sync with your peers and downstream teams?
+## 2️⃣ Prompt for your Copilot / UI agent (React UI)
+
+Use this with GitHub Copilot / Cursor / your UI agent to build the frontend around that JSON.
+
+```text
+I have a JSON response from an AI model with this structure (simplified):
+
+- global_summary.themes[]: global themes with:
+  - theme_id, theme_name, type, description, trend
+  - support_stats (total_comments, weighted_support_score, support_strength, confidence, etc.)
+- global_summary.strengths_theme_ids[], improvements_theme_ids[]
+- per_team_summaries[]:
+  - team_name
+  - themes_vs_global[]: one entry per global theme for this team
+  - team_unique_themes[]
+  - team_top_insights:
+    - strengths[]: top 2 items for UI (each maps to either a global or unique theme)
+    - improvements[]: top 2 items for UI
+- meta: total_comments, years_covered, teams, weighting_assumptions
+
+I want you to build a React (TypeScript) UI that uses this JSON to show insights to audit team users.
+
+Requirements:
+
+1. Data model:
+   - Define TypeScript interfaces for the JSON structure (GlobalTheme, SupportStats, TeamSummary, TeamTopInsight, etc.).
+   - Assume the JSON is fetched from an API endpoint (e.g., /api/audit-feedback-insights).
+   - Create a hook or context to load the JSON once and provide it to components.
+
+2. Layout:
+   - Main page layout:
+     - Left column: a scrollable list / table of teams (per_team_summaries).
+       - Columns: Team name, top 1–2 strength titles (from team_top_insights.strengths), top 1–2 improvement titles (from team_top_insights.improvements).
+       - Each row clickable to select that team.
+     - Right panel: details for the selected team.
+
+3. Team details panel (right):
+   - Section A: "Top strengths for this team"
+     - Render cards using team_top_insights.strengths:
+       - Show display_title as card title.
+       - Show ui_statement as body text.
+       - Show badges for:
+         - Generic vs Unique (based on theme_ref_type).
+         - support_stats.support_strength (e.g., "High support", "Medium support", "Single mention").
+         - confidence (e.g., 0.85 → "High confidence").
+   - Section B: "Top areas for improvement"
+     - Same pattern using team_top_insights.improvements.
+   - Section C: "Theme breakdown vs global"
+     - For each themes_vs_global entry:
+       - Show theme_name, team_status (with colored pill: green=strength, red=improvement, grey=not_relevant, yellow=mixed).
+       - Show a tiny bar/tags with total_comments and a quick indication of sentiment (e.g. positive vs negative counts).
+       - Add a "View evidence" button.
+   - Section D: "Evidence drawer / modal"
+     - When user clicks "View evidence" on any theme/insight:
+       - Open a side drawer or modal showing:
+         - Selected team and theme_name.
+         - Short_summary (for that team & theme).
+         - A list of supporting comments:
+           - For now, show comment_ids and sample_quotes from supporting_comments.
+           - Placeholder UI hook where we can later fetch the full comment text by id.
+       - If is_outlier is true on the top insight, show a small warning note like:
+         - "Based on limited comments – treat as a directional signal, not a strong pattern."
+
+4. Global view:
+   - Add a tab or collapsible panel called "Global themes".
+   - Show:
+     - For each global_summary.theme:
+       - theme_name, type, trend, description.
+       - A visual indicator of support_strength (e.g., dot with Low / Medium / High).
+     - A small summary for "Top global strengths" and "Top global areas for improvement" using strengths_theme_ids and improvements_theme_ids.
+
+5. Reusability:
+   - Separate components clearly:
+     - TeamList
+     - TeamDetailPanel
+     - InsightCard
+     - ThemeBreakdownTable
+     - EvidenceModal
+     - GlobalThemesPanel
+   - Each component receives typed props.
+
+6. UX expectations:
+   - Use a clean, dashboard-like layout.
+   - Use simple flexbox or CSS grid (no need for heavy styling framework unless you want to use something like MUI or Chakra UI).
+   - Handle loading and error states for the API call.
+
+Deliverables:
+- All relevant React components (TypeScript).
+- Example usage with a mock JSON object inline so I can see the UI without wiring a real backend yet.
+- Comments in code explaining where the real API call would go and where we could later plug in a "fetch full comments by ID" function.
