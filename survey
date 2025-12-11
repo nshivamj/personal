@@ -315,3 +315,66 @@ Deliverables:
 - All relevant React components (TypeScript).
 - Example usage with a mock JSON object inline so I can see the UI without wiring a real backend yet.
 - Comments in code explaining where the real API call would go and where we could later plug in a "fetch full comments by ID" function.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Subject: Concise Summary of Our Taxonomy & Audit Strategy Data Model
+
+Hi ,
+
+Below is a short, high-level summary of our data model across taxonomy, PCAT, and the new audit-strategy scoping.
+
+⸻
+
+1. PCAT (Mongo) – Project-Level Scoping
+	•	For each project, we store a list of objects containing OU, BP, RC, ToR, Control, Status.
+	•	These combinations are created per project when users select items in the UI.
+	•	PCAT today does not store a central master list of unique combinations.
+
+⸻
+
+2. Taxonomy Model (Master Data)
+	•	Independent tables for OU, BP, RC, ToR, Control.
+	•	Relationship mappings form a tree: OU → BP → RC → ToR → Control.
+	•	This defines the authoritative taxonomy structure (but not the full unique combination).
+
+⸻
+
+3. Audit Strategy Model
+	•	Audit Strategy introduces Audit Assurance and Audit Component.
+	•	Each Audit Component maps to a unique combination of
+OU + BP + RC + ToR + Control + Control Objective.
+
+⸻
+
+4. Generic Model (EAV) – Centralized Unique Combinations
+	•	We create entities for Audit Assurance, Audit Component, Data Privacy, and Taxonomy Combination.
+	•	Taxonomy Combination holds the full unique set (OU → Control Objective).
+	•	Relationship Audit Component → Taxonomy Combination gives us a single master list.
+	•	Each relationship has a unique Relationship ID used by all downstream systems.
+
+⸻
+
+5. How PCAT Uses This Now
+	•	During scoping, PCAT stores the taxonomy attributes + the Relationship ID (source = Audit Strategy).
+	•	This ID ties the PCAT record back to the central taxonomy + audit strategy definition.
+
+⸻
+
+✨ One-Line Summary
+
+All scoping now aligns to a central master via a unique Relationship ID that represents the full taxonomy combination under a given Audit Component.
+
+⸻
+
+If you’d like, I can also convert this into one slide / one diagram for even faster comprehension.
