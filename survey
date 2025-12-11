@@ -378,3 +378,151 @@ All scoping now aligns to a central master via a unique Relationship ID that rep
 ⸻
 
 If you’d like, I can also convert this into one slide / one diagram for even faster comprehension.
+
+
+
+
+
+
+
+
+
+
+
+Below is a clean, structured, MD-friendly summary of your full data-model explanation.
+I’ve rewritten it in a way that is conceptually clear, business-oriented, and precise, so you can directly paste it into an email to your MD.
+
+⸻
+
+📌 Subject: Summary of Our Data Model for Taxonomy, Audit Strategy, and PCAT Scoping
+
+Hi ,
+
+Sharing a structured summary of our overall data model spanning taxonomy, PCAT scoping, and the new audit-strategy–driven coverage.
+
+⸻
+
+1. PKET / PCAT Model (MongoDB – Project-Level View)
+
+We already have a validated NoSQL model that stores project-level scoping information.
+
+What is stored?
+
+For each project, we store a list of PKET objects, where each object contains:
+	•	OU (Operating Unit)
+	•	PP / BP (Business Process)
+	•	RC (Risk Category)
+	•	ToR (Test of Risk / TOR)
+	•	Control
+	•	Status (e.g., in plan, in scoping)
+
+Each object represents a selected taxonomy combination for that project.
+This is the same model that is loaded from cache into the UI for PCAT.
+
+Current Limitation
+
+We do not maintain one master table of unique OU–BP–RC–ToR–Control combinations.
+Instead, the unique combination is created and stored per project in Mongo when a user selects it.
+
+⸻
+
+2. Taxonomy Model (Relational / Structured Master Data)
+
+This model defines the hierarchical relationships among taxonomy elements.
+
+Independent Master Tables
+	•	OU
+	•	BP
+	•	RC
+	•	ToR
+	•	Control
+
+Relationship Tables
+
+We maintain mappings such as:
+	•	OU → BP
+	•	OU → RC
+	•	RC → ToR
+	•	ToR → Control
+
+This effectively represents a tree:
+
+OU → BP → RC → ToR → Control
+
+This is our master taxonomy repository but, as noted, it does not maintain the full unique combination as a single record today.
+
+⸻
+
+3. Audit Strategy Data Model (New Requirement)
+
+Audit Strategy introduces two dimensions:
+	•	Dimension 1: Audit Assurance
+	•	Dimension 2: Audit Component
+
+Each Audit Component corresponds to a unique taxonomy combination, extended with:
+	•	Control Objective
+
+For example:
+OU + BP + RC + ToR + Control + Control Objective → scoped under a given Audit Component.
+
+⸻
+
+4. Generic Taxonomy Model (Entity–Attribute–Value Based)
+
+To generalize and centralize all combinations, we use our generic EAV-based taxonomy framework.
+
+New Entity Types Created
+	1.	Audit Assurance (entity node)
+	2.	Audit Component (entity node)
+	3.	Data Privacy (entity node, parent grouping)
+	4.	Taxonomy Combination (entity node representing the full unique combination)
+
+Taxonomy Combination Entity Includes
+	•	OU
+	•	BP
+	•	RC
+	•	ToR
+	•	Control
+	•	Control Objective
+
+We then link Audit Component → Taxonomy Combination using a relationship.
+
+Result
+
+This produces the authoritative master list of:
+
+Data Privacy → Audit Assurance → Audit Component → OU → BP → RC → ToR → Control → Objective
+
+Each relationship record has a unique Relationship ID, which becomes the source of truth for downstream systems.
+
+⸻
+
+5. How PCAT Now Uses Audit Strategy Information
+
+During scoping:
+	1.	User selects an Audit Strategy and the corresponding Taxonomy Combination.
+	2.	PCAT stores:
+	•	The existing taxonomy attributes (OU, BP, RC, ToR, Control)
+	•	The Relationship ID
+	•	With source type = Audit Strategy
+
+Why this matters?
+
+The Relationship ID directly maps to the generic taxonomy model, which knows:
+	•	The audit dimension
+	•	The audit component
+	•	The underlying OU–BP–RC–ToR–Control–Objective combination
+
+This ensures alignment across PCAT, taxonomy, and all downstream systems.
+
+⸻
+
+6. Summary (One-Line Business Message)
+
+We have standardized our taxonomy and audit-strategy data into a centralized relationship model, where every scoped item—across PCAT or any other application—uses the same unique Relationship ID to represent an OU–BP–RC–ToR–Control–Objective combination under a given audit component.
+
+⸻
+
+If you want, I can also create a diagram or one-slide summary to accompany the email.
+
+Would you like that?
