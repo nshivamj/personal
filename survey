@@ -1,4 +1,578 @@
- Great — below is a complete, structured Architecture Document + Review Checklist + Standards Guide for your platform.
+ Perfect — let’s go deep and systematic on the Python Agent Runtime, including:
+	•	MCP tools ✅
+	•	Local Python tools ✅
+	•	Agent-to-agent calls ✅
+	•	Custom workflows ✅
+	•	Human-in-loop ✅
+	•	Provider abstractions ✅
+
+I’ll explain:
+
+1️⃣ Responsibilities of runtime
+2️⃣ Full folder structure
+3️⃣ Every module and file in detail
+4️⃣ Key classes/functions per file
+5️⃣ Execution flow
+6️⃣ How local + MCP tools coexist
+
+This is the real production-level breakdown.
+
+⸻
+
+🧠 1. What the Python Agent Runtime really is
+
+It is NOT just an API service.
+
+It is:
+
+Orchestrator
++ Agent registry
++ Tool discovery layer
++ MCP client
++ Local tool loader
++ Execution engine wrapper
++ Memory/state manager
++ Human-loop manager
++ Tracing & limits layer
+
+This is the brain of your AI platform.
+
+⸻
+
+🏗️ 2. FINAL RUNTIME STRUCTURE (recommended)
+
+python-agent-runtime/
+
+app/
+ ├── api/
+ │     server.py
+ │
+ ├── agents/
+ │     loader.py
+ │     registry.py
+ │     runner.py
+ │     wrappers.py
+ │
+ ├── tools/
+ │     loader.py
+ │     registry.py
+ │     local_loader.py
+ │     mcp_loader.py
+ │     builder.py
+ │
+ ├── mcp/
+ │     client.py
+ │     registry_client.py
+ │
+ ├── runtime/
+ │     orchestrator.py
+ │     context.py
+ │     limits.py
+ │     tracing.py
+ │     human_loop.py
+ │
+ ├── providers/
+ │     base/
+ │     adk/
+ │     mcp/
+ │     local/
+ │     memory/
+ │
+ └── config/
+       settings.py
+
+agents-config/
+local_tools/
+custom_workflows/
+
+
+⸻
+
+🌐 3. API LAYER
+
+⸻
+
+📄 api/server.py
+
+Purpose
+
+Expose runtime functionality externally.
+
+Endpoints
+
+POST /ask
+POST /agent/{name}/run
+POST /resume
+GET  /agents
+GET  /tools
+GET  /health
+
+Logic
+
+Very thin.
+
+def ask(req):
+    return orchestrator.handle_request(req.query, req.user)
+
+No business logic here.
+
+⸻
+
+🤖 4. AGENT MODULES
+
+⸻
+
+📄 agents/loader.py
+
+Loads YAML configs.
+
+Functions
+
+load_agent(name)
+load_all_agents()
+
+Returns:
+
+{
+ name,
+ type,
+ instruction,
+ allowed_tools,
+ allowed_agents,
+ execution.mode
+}
+
+
+⸻
+
+📄 agents/registry.py
+
+Stores agent configs in memory.
+
+Functions
+
+register(agent_config)
+get(name)
+list()
+
+Used by orchestrator and wrappers.
+
+⸻
+
+📄 agents/wrappers.py
+
+Wrap agents as callable tools.
+
+Why?
+
+Planner agents need to call domain agents.
+
+Function
+
+def wrap_agent(name, runner):
+
+    def tool_fn(query: str):
+        return runner.run_agent(name, query)
+
+    return tool(name=f"run_{name}")(tool_fn)
+
+
+⸻
+
+📄 agents/runner.py ⭐ critical
+
+Responsibilities
+	•	load agent config
+	•	load tools (local + MCP + agent wrappers)
+	•	choose execution engine
+	•	enforce limits
+	•	normalize response
+
+Main function
+
+run_agent(name, query, context)
+
+Pseudo:
+
+config = registry.get(name)
+tools = tool_loader.load(config)
+engine = provider_factory.get_agent_engine()
+result = engine.run(config, tools, context)
+return normalize(result)
+
+
+⸻
+
+🧰 5. TOOL SYSTEM (supports MCP + local)
+
+⸻
+
+📄 tools/registry.py
+
+Central storage of tool metadata.
+
+Functions:
+
+register(tool)
+get(name)
+list()
+
+
+⸻
+
+📄 tools/local_loader.py
+
+Loads local Python tools.
+
+Convention:
+
+local_tools/*.py
+
+Each file exposes:
+
+TOOLS = [ {name, description, callable} ]
+
+Loader:
+
+scan modules
+import TOOLS
+return metadata
+
+
+⸻
+
+📄 tools/mcp_loader.py
+
+Uses MCP client to:
+
+discover servers
+fetch /mcp/tools
+attach server URL
+
+Returns tool metadata.
+
+⸻
+
+📄 tools/builder.py ⭐ important
+
+Converts metadata → callable function.
+
+For MCP tools:
+
+call MCP client.execute()
+
+For local tools:
+
+call Python function directly
+
+For agent tools:
+
+call runner.run_agent()
+
+All wrapped into same interface:
+
+tool(**kwargs) → StandardEnvelope
+
+This unifies tool types.
+
+⸻
+
+📄 tools/loader.py
+
+Combines everything.
+
+load_all():
+   mcp_tools
+ + local_tools
+ + agent_wrapped_tools
+
+Applies:
+
+allowed_tools filter
+RBAC filter
+
+Returns final list for agent.
+
+⸻
+
+🔌 6. MCP MODULE
+
+⸻
+
+📄 mcp/client.py
+
+Handles:
+
+execute(tool_name,args)
+
+Responsibilities:
+	•	HTTP calls
+	•	retries
+	•	auth headers
+	•	timeout
+	•	logging
+
+⸻
+
+📄 mcp/registry_client.py
+
+Fetch MCP servers.
+
+GET /servers
+
+Returns list of base URLs.
+
+⸻
+
+🧭 7. RUNTIME CORE
+
+⸻
+
+📄 runtime/orchestrator.py ⭐ brain
+
+Handles:
+
+handle_request(query, user)
+
+Flow:
+
+router_agent → selected_agent → runner.run_agent()
+
+Also:
+	•	handles needs_input
+	•	saves pause state
+	•	resumes execution
+
+⸻
+
+📄 runtime/context.py
+
+Stores execution state:
+
+request_id
+user
+history
+depth
+tool_calls
+memory
+
+Passed everywhere.
+
+⸻
+
+📄 runtime/limits.py
+
+Prevents runaway agents.
+
+Checks:
+
+max_steps
+max_depth
+timeout
+token_budget
+
+
+⸻
+
+📄 runtime/tracing.py
+
+Logs:
+
+agent start
+tool call
+agent result
+latency
+errors
+
+Used for debugging dashboards.
+
+⸻
+
+📄 runtime/human_loop.py
+
+Handles pause/resume.
+
+Functions:
+
+request_input()
+save_state()
+resume_execution()
+
+Stores:
+
+pause_token
+agent_name
+context
+timestamp
+
+
+⸻
+
+🧩 8. PROVIDER LAYER (future-proofing)
+
+⸻
+
+base/
+
+Defines interfaces only.
+
+Example:
+
+ToolDiscoveryProvider
+ToolExecutor
+AgentEngine
+MemoryProvider
+HumanProvider
+
+
+⸻
+
+adk/
+
+Implements:
+
+ADKAgentEngine
+
+Uses:
+
+Agent or LoopAgent
+
+based on config.
+
+⸻
+
+mcp/
+
+Implements:
+
+MCPDiscoveryProvider
+MCPExecutor
+
+
+⸻
+
+local/
+
+Implements:
+
+LocalToolDiscoveryProvider
+
+
+⸻
+
+memory/
+
+Implements:
+
+RedisMemoryProvider
+DBMemoryProvider
+
+
+⸻
+
+⚙️ 9. CONFIG
+
+⸻
+
+📄 config/settings.py
+
+Centralized config:
+
+REGISTRY_URL
+PROVIDER_AGENT_ENGINE=adk
+PROVIDER_TOOL_DISCOVERY=mcp+local
+MAX_STEPS=6
+TIMEOUT=30
+
+No magic constants anywhere else.
+
+⸻
+
+🔄 10. FULL EXECUTION FLOW
+
+User → /ask
+ ↓
+server.py
+ ↓
+orchestrator.handle_request()
+ ↓
+router_agent
+ ↓
+selected agent
+ ↓
+runner.run_agent()
+ ↓
+tool_loader.load()
+   ├ MCP tools
+   ├ Local tools
+   └ Agent tools
+ ↓
+engine.run()   (ADK internally)
+ ↓
+tool called
+ ↓
+MCP client OR local function
+ ↓
+response normalized
+ ↓
+return to user
+
+
+⸻
+
+✅ 11. What teams actually implement
+
+They only touch:
+
+local_tools/*.py
+agents-config/*.yaml
+custom_workflows/*.py   (optional)
+
+Nothing else.
+
+That’s the success criteria.
+
+⸻
+
+🧭 FINAL SUMMARY
+
+Your Python runtime is:
+
+API layer
++ Orchestrator
++ Agent runner
++ Unified tool loader (MCP + local + agents)
++ MCP client
++ Provider abstraction
++ Memory + HITL manager
++ Limits + tracing
+
+This structure:
+	•	scales to many teams
+	•	supports experimentation
+	•	avoids lock-in
+	•	keeps logic centralized
+	•	keeps business code minimal
+
+⸻
+
+If you want next, I can:
+
+✅ Generate a minimal working runtime repo skeleton
+✅ Show real code example of local + MCP tool used in one agent
+✅ Draw visual diagram of runtime internals
+✅ Provide naming conventions + coding standards for your team
+
+Tell me which you want next.
+
+
+
+
+
+
+
+
+— below is a complete, structured Architecture Document + Review Checklist + Standards Guide for your platform.
 You can paste this into Confluence / Notion / Google Doc as your official design.
 
 ⸻
