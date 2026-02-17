@@ -1,4 +1,530 @@
-You are an AI assistant analyzing survey feedback across multiple teams and years.
+ Great — below is a complete, structured Architecture Document + Review Checklist + Standards Guide for your platform.
+You can paste this into Confluence / Notion / Google Doc as your official design.
+
+⸻
+
+🏢 Enterprise AI Platform Architecture Document
+
+1. Objective
+
+Build a scalable internal AI platform that enables teams to:
+	•	expose backend capabilities as AI-callable tools
+	•	define and deploy domain, router, planner, and action agents
+	•	orchestrate workflows across services
+	•	support human-in-the-loop interactions
+	•	dynamically discover tools via MCP registry
+	•	remain future-proof for new engineering capabilities
+
+⸻
+
+2. Design Principles
+	1.	Contract-driven — tools and agents follow standard schemas.
+	2.	Config-driven — agents defined in YAML/DB, not code.
+	3.	Domain-based isolation — services grouped by business domain.
+	4.	Loose coupling — runtime depends on provider interfaces, not implementations.
+	5.	Extensible — new discovery systems, engines, or memory stores plug in easily.
+	6.	Observable — every request traceable across agents and tools.
+	7.	Safe by default — RBAC, limits, and human approval built in.
+
+⸻
+
+3. High-Level Architecture
+
+User / UI / Slack / API
+        │
+        ▼
+API Gateway / BFF
+(Auth • Rate limit • Audit)
+        │
+        ▼
+Python Agent Runtime Service
+(Orchestrator + Agent Engine + MCP Client)
+        │
+        ▼
+MCP Gateway (optional)
+(Auth injection • retry • tracing)
+        │
+        ▼
+Global MCP Registry
+(server discovery)
+        │
+ ┌───────────────┬───────────────────┐
+ ▼               ▼                   ▼
+Java MCP       Python MCP        Future Providers
+Servers        Servers           (OpenAPI, gRPC, etc.)
+        │               │
+        ▼               ▼
+Business APIs     Data/ML services
+DB / Workflows    Analytics / Scripts
+
+
+⸻
+
+4. Core Platform Components
+
+⸻
+
+4.1 Agent Runtime Service (Python)
+
+Responsibilities
+	•	load agents dynamically
+	•	load tools dynamically from MCP registry
+	•	run agents using Agent Engine (ADK today)
+	•	support agent→agent calls
+	•	manage context/memory
+	•	enforce limits
+	•	normalize responses
+	•	expose API endpoints
+
+⸻
+
+4.2 MCP Registry (Existing)
+
+Stores:
+	•	MCP server URLs
+	•	metadata
+	•	health status
+	•	ownership
+
+Runtime queries this for discovery.
+
+⸻
+
+4.3 MCP Servers (Java/Python)
+
+Expose:
+
+GET  /mcp/tools
+POST /mcp/tools/{name}/call
+GET  /health
+
+Each tool defined dynamically via:
+	•	DB
+	•	YAML
+	•	admin UI
+
+⸻
+
+4.4 MCP Gateway (Recommended later)
+
+Adds:
+	•	auth injection
+	•	retries
+	•	centralized logging
+	•	routing
+	•	rate limits
+
+⸻
+
+5. Runtime Module Structure
+
+python-agent-runtime/
+
+app/
+ ├── api/server.py
+ ├── agents/
+ │     loader.py
+ │     registry.py
+ │     runner.py
+ │     wrappers.py
+ ├── mcp/
+ │     client.py
+ │     loader.py
+ │     tool_builder.py
+ │     registry_client.py
+ ├── runtime/
+ │     orchestrator.py
+ │     context.py
+ │     limits.py
+ │     tracing.py
+ │     human_loop.py
+ ├── providers/
+ │     base/
+ │     mcp/
+ │     adk/
+ │     redis/
+ └── config/settings.py
+
+agents-config/
+     router.yaml
+     planner.yaml
+     domain_agents.yaml
+
+
+⸻
+
+6. Provider Abstraction Layer
+
+Runtime must depend only on interfaces:
+
+ToolDiscoveryProvider
+	•	get_servers()
+	•	get_tools()
+
+ToolExecutor
+	•	execute(tool, args)
+
+AgentEngine
+	•	run(agent_config, tools, context)
+
+MemoryProvider
+	•	save(key,value)
+	•	load(key)
+
+HumanInteractionProvider
+	•	request_input()
+	•	resume()
+
+Implementations today:
+
+MCPDiscoveryProvider
+MCPToolExecutor
+ADKAgentEngine
+RedisMemoryProvider
+UIHumanProvider
+
+Future providers can be added without runtime change.
+
+⸻
+
+7. Agent Types
+
+⸻
+
+Router Agent
+	•	chooses domain agent
+	•	no tools
+	•	returns agent name only
+
+⸻
+
+Domain Agent
+	•	handles one domain
+	•	uses MCP tools only
+
+⸻
+
+Planner Agent
+	•	orchestrates workflows
+	•	calls domain agents as tools
+
+⸻
+
+Action Agent (optional)
+	•	executes write operations
+	•	restricted tool set
+
+⸻
+
+8. Agent Configuration Format
+
+Example:
+
+name: survey_agent
+type: domain
+model: gemini-1.5-pro
+
+instruction: Handle survey analytics.
+
+allowed_tools:
+  - survey_quality_analyzer
+
+allowed_agents: []
+
+
+⸻
+
+9. Tool Definition Model
+
+Each tool:
+
+name
+description
+input_schema
+execution_type
+execution_config
+owner
+version
+risk_level
+
+Execution types:
+
+http
+internal_bean
+queue
+agent_proxy
+
+
+⸻
+
+10. Standard Request & Response Contract
+
+⸻
+
+Standard Request
+
+{
+  "input": {...},
+  "context": {...},
+  "request_id": "...",
+  "caller": "agent_name"
+}
+
+
+⸻
+
+Standard Response Envelope
+
+{
+  "status": "success | error | needs_input",
+  "message": "...",
+  "data": {...},
+  "meta": {...},
+  "errors": []
+}
+
+All tools and agents must return this.
+
+Runtime normalizes if needed.
+
+⸻
+
+11. Human-in-the-Loop Design
+
+If agent needs user input:
+
+status: needs_input
+meta.pause_token
+data.questions[]
+
+Runtime:
+	1.	saves execution state
+	2.	returns response to UI
+	3.	UI collects answer
+	4.	/resume endpoint continues execution
+
+⸻
+
+12. Memory Strategy
+
+Short-term
+	•	Redis/session store
+	•	conversation history
+	•	workflow state
+
+Long-term
+	•	DB or vector store
+	•	user preferences
+	•	historical decisions
+
+⸻
+
+13. Execution Flow Example
+
+User:
+
+Analyze survey 123 and notify manager if bad
+
+Flow:
+	1.	API → runtime
+	2.	router_agent selects survey_agent
+	3.	survey_agent loads tools dynamically
+	4.	calls survey_quality_analyzer via MCP
+	5.	receives result
+	6.	planner decides to notify
+	7.	calls notify_manager tool
+	8.	response returned
+	9.	tracing recorded
+
+⸻
+
+14. Security Model
+	•	auth token injected to MCP servers
+	•	tool-level RBAC
+	•	agent-level RBAC
+	•	PII redaction before LLM calls
+	•	audit log for every action
+
+⸻
+
+15. Observability
+
+Track:
+
+request_id
+user
+agent_chain
+tool_calls
+latency
+token_usage
+errors
+
+Provide:
+	•	logs
+	•	metrics
+	•	execution graph visualization
+
+⸻
+
+16. Cost Governance
+
+Track per:
+
+team
+agent
+request
+tool chain
+
+Alert if thresholds exceeded.
+
+⸻
+
+17. Deployment Model
+
+Services:
+
+agent-runtime (Python)
+mcp-java-domain-services
+mcp-python-domain-services
+registry-service
+gateway-service (optional)
+
+All containerized.
+
+⸻
+
+18. Review Checklist (Architecture)
+
+Use this to validate your design.
+
+⸻
+
+Core Platform
+	•	runtime has no hardcoded MCP URLs
+	•	discovery done via provider interface
+	•	agent configs stored outside code
+	•	tools dynamically loaded
+	•	responses normalized centrally
+
+⸻
+
+Security
+	•	RBAC enforced for tools
+	•	write tools restricted
+	•	PII redaction before LLM
+	•	audit logs stored
+
+⸻
+
+Reliability
+	•	retry logic for tool calls
+	•	fallback strategy defined
+	•	timeout per tool
+	•	loop depth limit
+
+⸻
+
+Observability
+	•	request tracing implemented
+	•	agent chain visible
+	•	tool latency tracked
+	•	token usage tracked
+
+⸻
+
+Extensibility
+	•	discovery provider abstracted
+	•	execution provider abstracted
+	•	agent engine abstracted
+	•	memory provider abstracted
+	•	human interaction provider abstracted
+
+⸻
+
+Developer Experience
+	•	tool catalog accessible
+	•	agent configs validated automatically
+	•	local testing workflow exists
+	•	example repo provided
+
+⸻
+
+19. Platform Maturity Roadmap
+
+⸻
+
+Phase 1 — Foundation
+	•	runtime
+	•	MCP discovery
+	•	basic agents
+	•	standard envelope
+
+⸻
+
+Phase 2 — Governance
+	•	RBAC
+	•	tracing
+	•	cost tracking
+	•	evaluation pipeline
+
+⸻
+
+Phase 3 — DX
+	•	UI tool catalog
+	•	agent playground
+	•	visual traces
+
+⸻
+
+Phase 4 — Scale
+	•	async tools
+	•	multi-tenant isolation
+	•	streaming responses
+
+⸻
+
+Phase 5 — Intelligence
+	•	automated testing of agents
+	•	tool quality scoring
+	•	adaptive routing policies
+
+⸻
+
+✅ Final Statement
+
+This architecture provides:
+	•	dynamic tool discovery
+	•	flexible agent orchestration
+	•	standardized contracts
+	•	extensible provider model
+	•	enterprise governance controls
+
+and is suitable for large multi-team adoption.
+
+⸻
+
+If you want, I can also generate:
+
+✅ A polished Confluence-ready version with headings & tables
+✅ Sequence diagram for one request
+✅ Architecture diagram image-style layout
+✅ Platform onboarding guide for your team
+✅ Risk register for this design
+
+Tell me which you want next.
+
+
+
+
+
+
+
+
+
+
+
+
+are an AI assistant analyzing survey feedback across multiple teams and years.
 
 INPUT:
 You will receive a JSON object with an array called "feedback".
