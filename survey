@@ -1,4 +1,456 @@
- Perfect — let’s go deep and systematic on the Python Agent Runtime, including:
+ Excellent — now you’re describing the real runtime internals that many people ignore.
+
+You’re not just building:
+
+“Agent runner + tools”
+
+You’re building:
+
+A session-aware, stateful, async-capable AI execution engine.
+
+Let’s design this properly and cleanly — without overengineering.
+
+⸻
+
+🧠 What You Now Have in Scope
+
+Your Python Agent Runtime now includes:
+	•	✅ Agent definitions
+	•	✅ Session management
+	•	✅ Session manager
+	•	✅ Helper utilities
+	•	✅ Tool JSON schemas
+	•	✅ Async agent execution
+	•	✅ MCP tools
+	•	✅ Local tools
+	•	✅ Custom workflows
+	•	✅ Human-in-loop
+
+Let’s reorganize everything into a clean production-ready structure.
+
+⸻
+
+🏗️ Recommended Runtime Structure (With Sessions + Async)
+
+python-agent-runtime/
+
+app/
+ ├── api/
+ │     server.py
+ │
+ ├── agents/
+ │     definitions.py
+ │     loader.py
+ │     registry.py
+ │     runner.py
+ │
+ ├── sessions/
+ │     models.py
+ │     manager.py
+ │     store.py
+ │
+ ├── tools/
+ │     schema.py
+ │     registry.py
+ │     local_loader.py
+ │     mcp_loader.py
+ │     builder.py
+ │
+ ├── async_exec/
+ │     agent_async.py
+ │     task_manager.py
+ │
+ ├── mcp/
+ │     client.py
+ │     registry_client.py
+ │
+ ├── runtime/
+ │     orchestrator.py
+ │     context.py
+ │     limits.py
+ │     tracing.py
+ │     human_loop.py
+ │     helpers.py
+ │
+ ├── config/
+ │     settings.py
+ │
+agents-config/
+local_tools/
+custom_workflows/
+
+Now let’s go deep into each.
+
+⸻
+
+🧑‍💻 1️⃣ Agent Definitions
+
+📄 agents/definitions.py
+
+Defines structure for agent config:
+
+class AgentDefinition:
+
+    def __init__(self, name, type, instruction,
+                 allowed_tools=None,
+                 allowed_agents=None,
+                 execution=None):
+        self.name = name
+        self.type = type
+        self.instruction = instruction
+        self.allowed_tools = allowed_tools or []
+        self.allowed_agents = allowed_agents or []
+        self.execution = execution or {}
+
+Why?
+	•	Avoid raw dict usage everywhere
+	•	Centralize validation
+	•	Easier future changes
+
+⸻
+
+🗂 2️⃣ Session System (Critical for Stability)
+
+You mentioned:
+
+session logic
+session management
+session manager
+
+This is excellent.
+
+⸻
+
+📄 sessions/models.py
+
+class Session:
+
+    def __init__(self, session_id, user_id):
+        self.session_id = session_id
+        self.user_id = user_id
+        self.history = []
+        self.state = {}
+        self.status = "active"
+        self.created_at = time.time()
+
+Tracks:
+	•	conversation history
+	•	workflow state
+	•	pause status
+	•	tool call history
+
+⸻
+
+📄 sessions/store.py
+
+Handles persistence.
+
+For now:
+
+class InMemorySessionStore:
+    def __init__(self):
+        self.sessions = {}
+
+    def save(self, session):
+        self.sessions[session.session_id] = session
+
+    def get(self, session_id):
+        return self.sessions.get(session_id)
+
+Later can replace with Redis/DB.
+
+⸻
+
+📄 sessions/manager.py ⭐ critical
+
+Central entry point.
+
+class SessionManager:
+
+    def create(self, user_id): ...
+    def get(self, session_id): ...
+    def update_history(self, session_id, message): ...
+    def pause(self, session_id, data): ...
+    def resume(self, session_id): ...
+
+Your orchestrator must always go through this.
+
+Never manipulate sessions directly.
+
+⸻
+
+🛠 3️⃣ Helper Functions
+
+📄 runtime/helpers.py
+
+Centralized utilities:
+	•	normalize_response()
+	•	generate_request_id()
+	•	enforce_standard_envelope()
+	•	validate_schema()
+	•	safe_json_parse()
+
+Important rule:
+
+No random helper logic scattered across modules.
+
+⸻
+
+📦 4️⃣ Tool JSON Schema Handling
+
+📄 tools/schema.py
+
+Handles validation of tool input.
+
+def validate_input(schema, payload):
+    jsonschema.validate(payload, schema)
+
+Used before:
+	•	calling MCP tool
+	•	calling local tool
+
+Prevents LLM misuse.
+
+⸻
+
+🔧 5️⃣ Tool Registry
+
+📄 tools/registry.py
+
+Central tool catalog.
+
+register(tool_meta)
+get(name)
+list()
+
+Tool meta structure:
+
+{
+  "name": "...",
+  "description": "...",
+  "schema": {...},
+  "type": "mcp | local | agent",
+  "callable": function
+}
+
+
+⸻
+
+🔄 6️⃣ Async Agent Execution
+
+This is important for:
+	•	long workflows
+	•	background tasks
+	•	Slack-triggered execution
+	•	batch operations
+
+⸻
+
+📄 async_exec/task_manager.py
+
+Simple async registry:
+
+class TaskManager:
+
+    def submit(self, coro):
+        task_id = uuid4()
+        asyncio.create_task(self._run(task_id, coro))
+        return task_id
+
+    async def _run(self, task_id, coro):
+        result = await coro
+        self.results[task_id] = result
+
+
+⸻
+
+📄 async_exec/agent_async.py
+
+async def run_agent_async(name, query, session):
+    return runner.run_agent(name, query, session)
+
+
+⸻
+
+API
+
+POST /agent/{name}/run_async
+GET  /tasks/{task_id}
+
+This allows non-blocking workflows.
+
+⸻
+
+🧠 7️⃣ Orchestrator (Now Session-Aware)
+
+📄 runtime/orchestrator.py
+
+Main flow:
+
+def handle_request(query, user, session_id=None):
+
+    if not session_id:
+        session = session_manager.create(user)
+    else:
+        session = session_manager.get(session_id)
+
+    context = build_context(session)
+
+    router = registry.get("router_agent")
+    selected = runner.run_agent(router, query, context)
+
+    result = runner.run_agent(selected, query, context)
+
+    session_manager.update_history(session.id, result)
+
+    return result
+
+This ensures:
+	•	session history preserved
+	•	multi-turn conversations work
+	•	human-in-loop resumes cleanly
+
+⸻
+
+🧠 8️⃣ Human-in-Loop with Sessions
+
+When agent returns:
+
+status = needs_input
+
+Orchestrator:
+
+session_manager.pause(session_id, pause_data)
+
+When /resume called:
+
+session = session_manager.resume(session_id)
+runner.run_agent(...)
+
+Clean separation.
+
+⸻
+
+🧩 9️⃣ Where Local Tools Fit
+
+Local tools live in:
+
+local_tools/*.py
+
+Loaded via:
+
+tools/local_loader.py
+
+Converted into:
+
+callable(**kwargs)
+
+Used exactly same as MCP tools.
+
+No difference inside agent.
+
+⸻
+
+🧭 10️⃣ Execution Flow with Session + Async
+
+User
+ ↓
+/ask
+ ↓
+SessionManager.create/get
+ ↓
+Orchestrator
+ ↓
+AgentRunner
+ ↓
+ToolLoader
+   ├ MCP tools
+   ├ Local tools
+   └ Agent tools
+ ↓
+ADK Agent
+ ↓
+Tool execution
+ ↓
+Response normalized
+ ↓
+Session updated
+ ↓
+Return result
+
+Async path:
+
+/run_async
+ ↓
+TaskManager.submit
+ ↓
+run_agent_async
+ ↓
+store result
+
+
+⸻
+
+🧱 11️⃣ Architectural Stability Check
+
+With this structure you now support:
+
+Capability	Covered?
+Multi-turn chat	✅
+Pause/resume	✅
+Async execution	✅
+Local tools	✅
+MCP tools	✅
+Agent-to-agent	✅
+Custom workflows	✅
+Schema validation	✅
+Response normalization	✅
+
+
+⸻
+
+🧭 12️⃣ Important Design Discipline
+	1.	Session logic lives ONLY in sessions/
+	2.	Tool logic lives ONLY in tools/
+	3.	Agent logic lives ONLY in agents/
+	4.	No cross-import chaos
+	5.	Orchestrator coordinates — never executes business logic
+
+If you maintain this, your runtime remains clean.
+
+⸻
+
+✅ Final Takeaway
+
+Your Python Agent Runtime is now:
+
+Stateful
+Session-aware
+Async-capable
+Multi-tool
+Multi-agent
+Human-in-loop
+Enterprise-ready
+
+And still manageable.
+
+⸻
+
+If you want next, I can:
+	•	Design a Session state diagram
+	•	Show a production-grade async model (Celery/Kafka)
+	•	Create a concurrency and scaling strategy
+	•	Help you define testing strategy for session + async + agents
+	•	Create a clean UML-style architecture diagram
+
+Tell me which direction you want to go next.
+
+
+
+
+
+
+Perfect — let’s go deep and systematic on the Python Agent Runtime, including:
 	•	MCP tools ✅
 	•	Local Python tools ✅
 	•	Agent-to-agent calls ✅
