@@ -1,4 +1,624 @@
- Excellent — now you’re describing the real runtime internals that many people ignore.
+
+Perfect. Below is your final production-ready agent platform structure — written so you can paste it into Copilot or a design doc and generate the codebase.
+
+This assumes:
+	•	✅ You already have a Prompt Service (LLM gateway)
+	•	✅ You have MCP registry + servers
+	•	✅ Agents run in Python runtime
+	•	✅ Tools can be local / MCP / sub-agent
+	•	✅ You support planner agents, router agents, workflows, async jobs
+
+I’ll give:
+
+1️⃣ Full folder structure
+2️⃣ Every module → files → functions
+3️⃣ Responsibility of each file
+4️⃣ Responsibility of each function
+
+⸻
+
+🏗️ ROOT PROJECT STRUCTURE
+
+agent-platform/
+
+app/
+ ├── api/
+ ├── orchestrator/
+ ├── runner/
+ ├── agents/
+ ├── tools/
+ ├── mcp/
+ ├── sessions/
+ ├── async_exec/
+ ├── schemas/
+ ├── services/        # prompt service integration
+ ├── utils/
+ └── config/
+
+agents-config/
+local_tools/
+custom_workflows/
+
+
+⸻
+
+🌐 1️⃣ API MODULE — external entrypoints
+
+api/server.py
+
+Purpose: expose HTTP endpoints and delegate execution.
+
+ask(request)
+
+Generic chat endpoint → orchestrator decides router or planner.
+
+run_agent(request)
+
+Run a specific agent directly (UI button or domain API).
+
+resume(request)
+
+Resume paused session with user input.
+
+task_status(task_id)
+
+Return async job status.
+
+task_result(task_id)
+
+Return async job result.
+
+health()
+
+API health check.
+
+⸻
+
+🧠 2️⃣ ORCHESTRATOR MODULE — request lifecycle manager
+
+orchestrator/orchestrator.py
+
+Purpose: control request lifecycle, sessions, routing, aggregation.
+
+handle_request(query, user, session_id=None)
+
+Main entry:
+	•	load/create session
+	•	build context
+	•	select entry agent
+	•	run via runner
+	•	persist result
+	•	return response
+
+⸻
+
+run_specific_agent(agent_name, query, session_id)
+
+Used by API endpoints mapped to planners.
+
+⸻
+
+resume_session(session_id, answer)
+
+Inject user input into paused workflow and continue.
+
+⸻
+
+_get_or_create_session(session_id, user)
+
+Fetch session or create new.
+
+⸻
+
+_build_context(session, query, user)
+
+Create runtime context object:
+history, state, metadata.
+
+⸻
+
+_select_entry_agent(query, context)
+
+If generic endpoint → run router agent
+Else → return API-mapped planner.
+
+⸻
+
+_execute_agents(agent_list, mode, query, context)
+
+Run one or multiple agents:
+	•	single
+	•	parallel
+	•	sequential
+
+⸻
+
+_combine_results(results)
+
+Merge outputs OR call aggregator agent.
+
+⸻
+
+_persist_result(session, query, result)
+
+Save conversation + update state.
+
+⸻
+
+⚙️ 3️⃣ RUNNER MODULE — execution engine
+
+runner/runner.py
+
+Purpose: safely execute one agent.
+
+run_agent(agent_name, query, context)
+
+Core execution pipeline:
+	1.	load agent definition
+	2.	validate input schema
+	3.	prepare query/context
+	4.	build session for prompt service
+	5.	load tools + sub-agents
+	6.	choose execution mode
+	7.	run agent/workflow
+	8.	validate output schema
+	9.	normalize response
+
+⸻
+
+_prepare_input(agent, query, context)
+
+Inject history/state into prompt input.
+
+⸻
+
+_build_runtime_session(context)
+
+Create session object used by prompt service.
+
+⸻
+
+_load_tools(agent)
+
+Load:
+	•	local tools
+	•	MCP tools
+	•	sub-agent wrappers
+
+⸻
+
+_run_router(agent, query, context)
+
+Execute router agent using prompt service JSON output.
+
+⸻
+
+_run_planner(agent, tools, query, context)
+
+Execute planner using prompt service + tool loop.
+
+⸻
+
+_run_workflow(agent, query, context)
+
+Load Python workflow class from custom_workflows/ and run.
+
+⸻
+
+_normalize_result(result)
+
+Ensure standard response envelope:
+
+status, message, data
+
+
+⸻
+
+🤖 4️⃣ AGENTS MODULE — definitions + registry
+
+agents/definitions.py
+
+Purpose: define agent metadata structure.
+
+class AgentDefinition
+
+Fields:
+	•	name
+	•	type (router/planner/domain/workflow)
+	•	instruction
+	•	allowed_tools
+	•	allowed_agents
+	•	execution config
+	•	workflow class name
+	•	input_schema
+	•	output_schema
+
+⸻
+
+agents/loader.py
+
+Purpose: load agent configs.
+
+load_all_agents()
+
+Load YAML files from agents-config/.
+
+load_agent(name)
+
+Load one agent config.
+
+⸻
+
+agents/registry.py
+
+Purpose: store agent definitions in memory.
+
+register(agent_def)
+
+Add definition.
+
+get(name)
+
+Fetch definition.
+
+exists(name)
+
+Check availability.
+
+list_agents()
+
+Return all agent names.
+
+⸻
+
+agents/wrappers.py
+
+Purpose: allow agents to call other agents as tools.
+
+wrap_agent(agent_name)
+
+Return callable function that calls:
+
+runner.run_agent(agent_name)
+
+
+⸻
+
+🧰 5️⃣ TOOLS MODULE — unified tool interface
+
+tools/loader.py
+
+Purpose: collect all tools allowed for agent.
+
+load_tools(agent_def)
+
+Return callable tools list.
+
+⸻
+
+tools/local_loader.py
+
+load_local_tools()
+
+Scan local_tools/ folder and import Python tools.
+
+⸻
+
+tools/mcp_loader.py
+
+load_mcp_tools()
+
+Ask MCP module for available tools metadata.
+
+⸻
+
+tools/builder.py
+
+build_tool(meta)
+
+Convert metadata → callable function.
+
+If:
+	•	local → Python callable
+	•	MCP → HTTP wrapper using execution_client
+	•	agent → wrapper from agents.wrappers
+
+⸻
+
+🔌 6️⃣ MCP MODULE — communication with MCP servers
+
+mcp/registry_client.py
+
+get_servers()
+
+Fetch MCP servers from registry.
+
+⸻
+
+mcp/discovery_client.py
+
+get_tools(server_url)
+
+Fetch tool metadata from MCP server.
+
+⸻
+
+mcp/execution_client.py
+
+execute(server_url, tool_name, args)
+
+Call MCP server tool endpoint.
+
+Handles:
+	•	retry
+	•	timeout
+	•	auth
+
+⸻
+
+mcp/health_client.py
+
+check_health(server_url)
+
+Ping /health.
+
+⸻
+
+mcp/cache.py
+
+get_cached_tools(server)
+
+Return cached metadata.
+
+store_tools(server, tools)
+
+Cache discovery results.
+
+⸻
+
+🗂️ 7️⃣ SESSIONS MODULE — conversation persistence
+
+sessions/session_manager.py
+
+create_session(user)
+
+Create new session.
+
+get_session(session_id)
+
+Fetch stored session.
+
+save_session(session)
+
+Persist updates.
+
+⸻
+
+sessions/models.py
+
+class Session
+
+Fields:
+	•	id
+	•	user
+	•	history
+	•	state
+	•	status
+	•	metadata
+
+⸻
+
+⚡ 8️⃣ ASYNC_EXEC MODULE — background job manager
+
+async_exec/task_manager.py
+
+submit_agent_task(agent_name, query, context)
+
+Create async job.
+
+get_task_status(task_id)
+
+Return job status.
+
+get_task_result(task_id)
+
+Return stored result.
+
+cancel_task(task_id)
+
+Cancel job.
+
+⸻
+
+async_exec/worker.py
+
+run_task(task)
+
+Execute:
+
+runner.run_agent(...)
+
+Store result.
+
+⸻
+
+async_exec/queue_backend.py
+
+enqueue(task)
+
+Add job.
+
+dequeue()
+
+Worker fetches job.
+
+store_result(task_id, result)
+
+Persist result.
+
+⸻
+
+🧾 9️⃣ SCHEMAS MODULE — validation definitions
+
+schemas/router_schema.py
+
+Defines router output JSON schema.
+
+schemas/agent_schema.py
+
+Defines standard agent output envelope.
+
+schemas/tool_schema.py
+
+Defines tool metadata format.
+
+⸻
+
+🧠 🔟 SERVICES MODULE — your existing prompt service integration
+
+services/prompt_service.py
+
+generate(prompt, context=None, model=None)
+
+Return text response.
+
+generate_json(prompt, schema, context=None, model=None)
+
+Return structured JSON, validate, repair if needed.
+
+stream(prompt, ...)
+
+Optional streaming.
+
+This is your only LLM interface.
+
+⸻
+
+🧰 1️⃣1️⃣ UTILS MODULE — shared helpers
+
+utils/json_utils.py
+	•	safe_json_load(text)
+	•	safe_json_dump(obj)
+	•	extract_json(text)
+
+⸻
+
+utils/schema.py
+	•	validate(schema, data)
+	•	repair(schema, output)
+
+⸻
+
+utils/retry.py
+	•	retry(func, attempts, timeout)
+
+⸻
+
+utils/ids.py
+	•	generate_request_id()
+	•	generate_session_id()
+
+⸻
+
+utils/tracing.py
+	•	start_trace(name)
+	•	log_event(event)
+	•	end_trace(result)
+
+⸻
+
+⚙️ 1️⃣2️⃣ CONFIG MODULE — environment settings
+
+config/settings.py
+
+Holds:
+	•	MCP registry URL
+	•	timeouts
+	•	retry counts
+	•	history limits
+	•	feature flags
+
+load_settings()
+
+Load from env/YAML.
+
+⸻
+
+📁 EXTERNAL FOLDERS
+
+agents-config/
+
+Planner/router/domain configs (YAML).
+
+local_tools/
+
+Python tool scripts.
+
+custom_workflows/
+
+Contains:
+
+base_workflow.py
+archive_workflow.py
+report_workflow.py
+
+
+⸻
+
+custom_workflows/base_workflow.py
+
+class BaseWorkflow:
+    def run(self, query, context):
+        pass
+
+All workflows inherit.
+
+⸻
+
+✅ FINAL EXECUTION FLOW
+
+API → Orchestrator
+        ↓
+     Runner
+        ↓
+   Agent definition
+        ↓
+   Tools + Prompt Service
+        ↓
+   MCP/local/sub-agent calls
+        ↓
+   Result validated
+        ↓
+   Session saved
+        ↓
+   Response returned
+
+
+⸻
+
+If you want, I can next:
+
+✅ Generate a single prompt you can paste into Copilot to scaffold this repo
+✅ Produce starter Python files for each module (empty but structured)
+✅ Draw a clean architecture diagram of this entire system
+✅ Help you design naming conventions + coding standards for your team
+
+Tell me which you want next.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+— now you’re describing the real runtime internals that many people ignore.
 
 You’re not just building:
 
