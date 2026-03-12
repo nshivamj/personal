@@ -1,4 +1,302 @@
 
+CLAUDE CODE PROMPT — Day 1 Agentic Platform
+You are the orchestrator. Spawn 4 sub-agents in parallel. Do not write code yourself until all sub-agents complete, then do the integration steps.
+
+Context
+Building a generic agentic platform on Google ADK (adk web). Day 1 domain: GitLab. Two agents: coordinator_agent routes to gitlab_workflow, which runs gitlab_agent. Tools are independent and self-registering — agents declare tool names in YAML, resolver looks them up from a global registry.
+Shared contracts (all sub-agents must honor exactly)
+
+ToolResult:       success:bool, data:Any, error:str|None, metadata:dict
+CallbackSig:      (callback_context) -> LlmResponse | None
+tool name format: {domain}_{operation}  e.g. gitlab_list_commits
+session key fmt:  "{scope}:{key}"       e.g. "app:gitlab_default_project"
+
+
+SUB-AGENT 1 — tool-and-registry
+Build the tool foundation.
+tools/base_tool.py
+	∙	ToolResult dataclass: success, data, error, metadata
+	∙	BaseTool ABC: name:str, description:str, requires_approval:bool=False, abstract execute(**kwargs)->ToolResult, concrete to_adk_function()->callable that wraps execute() as a plain Python function ADK can register as a tool
+tools/registry.py
+	∙	Module-level _registry: dict[str, BaseTool] = {}
+	∙	register(tool: BaseTool) — raises ValueError if name already registered
+	∙	get(name: str) -> BaseTool — raises KeyError with message "Tool '{name}' not found. Available: {list_all()}"
+	∙	list_all() -> list[str]
+	∙	get_many(names: list[str]) -> list[BaseTool]
+tools/gitlab/gitlab_local.py
+One class per operation extending BaseTool. Uses python-gitlab SDK. Reads GITLAB_URL, GITLAB_TOKEN, GITLAB_DEFAULT_PROJECT from env. Returns ToolResult always — never raises. Converts raw SDK responses via domains/gitlab/transformers.py.
+
+
+
+|Class                |name                     |requires_approval|
+|---------------------|-------------------------|-----------------|
+|`ListCommitsTool`    |`gitlab_list_commits`    |False            |
+|`GetCommitTool`      |`gitlab_get_commit`      |False            |
+|`ListMRsTool`        |`gitlab_list_mrs`        |False            |
+|`GetMRTool`          |`gitlab_get_mr`          |False            |
+|`CreateMRTool`       |`gitlab_create_mr`       |True             |
+|`ListPipelinesTool`  |`gitlab_list_pipelines`  |False            |
+|`GetPipelineTool`    |`gitlab_get_pipeline`    |False            |
+|`TriggerPipelineTool`|`gitlab_trigger_pipeline`|True             |
+
+Bottom of file — self-register all on import:
+
+for _cls in [ListCommitsTool, GetCommitTool, ListMRsTool, GetMRTool,
+             CreateMRTool, ListPipelinesTool, GetPipelineTool, TriggerPipelineTool]:
+    registry.register(_cls())
+
+
+Verify: python -c "import tools.gitlab.gitlab_local; from tools.registry import list_all; print(list_all())" prints all 8 names.
+
+SUB-AGENT 2 — domain-schemas-and-prompts
+Build schemas, transformers, and prompts. No ADK imports. No tool imports.
+domains/gitlab/schemas.py — Pydantic v2:
+	∙	CommitInfo: sha, short_sha, title, author, date, url
+	∙	MergeRequestInfo: iid, title, state, source_branch, target_branch, author, url
+	∙	PipelineInfo: id, status, ref, created_at, url
+	∙	GitLabResult: operation:str, success:bool, data:list[dict], summary:str, error:str|None — this is the output_schema for gitlab_agent
+domains/gitlab/transformers.py — pure functions, input is raw python-gitlab SDK dict:
+	∙	raw_to_commit(raw: dict) -> CommitInfo
+	∙	raw_to_mr(raw: dict) -> MergeRequestInfo
+	∙	raw_to_pipeline(raw: dict) -> PipelineInfo
+domains/gitlab/prompts/coordinator_v1.py
+
+COORDINATOR_V1 = """
+You are a coordinator. Route user requests to the correct workflow.
+Available: gitlab_workflow — handles ALL GitLab requests (commits, MRs, pipelines).
+Route only. Do not answer questions yourself.
+If not GitLab-related, say so and stop.
+"""
+
+
+domains/gitlab/prompts/gitlab_agent_v1.py
+
+GITLAB_AGENT_V1 = """
+You are a GitLab agent with tools to query and manage GitLab.
+Always call a tool — never answer from memory.
+Think step by step. State which tool you will call and why before calling it.
+For write operations (create_mr, trigger_pipeline): confirm details before executing.
+Default project: {gitlab_default_project}
+"""
+
+
+framework/schema_registry.py — maps string name to class:
+
+from domains.gitlab.schemas import GitLabResult
+SCHEMAS = { "GitLabResult": GitLabResult }
+def resolve(name: str | None): return SCHEMAS.get(name) if name else None
+
+
+framework/prompt_registry.py — maps prompt_id to string:
+
+from domains.gitlab.prompts.coordinator_v1 import COORDINATOR_V1
+from domains.gitlab.prompts.gitlab_agent_v1 import GITLAB_AGENT_V1
+PROMPTS = { "coordinator_v1": COORDINATOR_V1, "gitlab_agent_v1": GITLAB_AGENT_V1 }
+def get(prompt_id: str) -> str: return PROMPTS[prompt_id]
+
+
+Verify: python -c "from domains.gitlab.schemas import GitLabResult; print(GitLabResult.model_fields)" — no errors.
+
+SUB-AGENT 3 — framework-callbacks-and-session
+Build session manager, all 4 callbacks, and composer. Depends on ToolResult shape from Sub-Agent 1 — import only from tools.base_tool, nothing else from Sub-Agent 1.
+framework/session_manager.py
+Module-level singleton. Three scopes backed by plain dicts for Day 1.
+	∙	session: — per-run, cleared after each run
+	∙	user: — keyed by user_id, lives for process lifetime
+	∙	app: — populated once at startup from env
+
+class SessionManager:
+    def get(self, scope_key: str, default=None)   # "app:gitlab_default_project"
+    def set(self, scope_key: str, value)
+    def clear_session_scope(self)
+    def init_app_scope(self)   # reads env vars into app: keys
+
+session_mgr = SessionManager()   # singleton
+
+
+init_app_scope() populates:
+	∙	app:tool_mode from TOOL_MODE env (default local)
+	∙	app:gitlab_default_project from GITLAB_DEFAULT_PROJECT env
+	∙	app:allowed_agents from ALLOWED_AGENTS env (default *)
+framework/callbacks/before_agent_cb.py
+Controller — returns LlmResponse to block or None to proceed.
+	1.	Permission check: read app:allowed_agents from session_mgr. If not * and callback_context.agent.name not in list → return LlmResponse(content=[Part(text="Agent not permitted.")]).
+	2.	Session injection: if agent is gitlab_agent, write callback_context.state['gitlab_default_project'] = session_mgr.get('app:gitlab_default_project').
+framework/callbacks/after_agent_cb.py
+Controller — returns None.
+	1.	Write agent output to session: callback_context.state[f"{callback_context.agent.name}_output"] = callback_context.state.get('_output').
+	2.	Set checkpoint: callback_context.state[f"checkpoint_{callback_context.agent.name}"] = True.
+	3.	If agent is gitlab_agent and output has success=False, write callback_context.state['gitlab_last_error'] = output.error.
+framework/callbacks/before_model_cb.py
+Observer — returns None. Appends narration style to system instruction:
+	∙	gitlab_agent → append "Think step by step. State which tool you will call and why."
+	∙	all others → nothing
+framework/callbacks/after_tool_cb.py
+Observer — returns None. Appends one JSON line to reports/traces/tool_calls.jsonl:
+
+{"agent": "...", "tool": "...", "success": true, "timestamp": "..."}
+
+
+Creates file and parent dirs if they don’t exist.
+framework/composer.py
+
+CALLBACK_REGISTRY = {
+    "before_agent_cb":  before_agent_cb,
+    "after_agent_cb":   after_agent_cb,
+    "before_model_cb":  before_model_cb,
+    "after_tool_cb":    after_tool_cb,
+}
+
+def compose(names: list[str]) -> callable | None:
+    # empty list → return None
+    # one name → return function directly
+    # multiple → return wrapper that calls each in order,
+    #            returns first non-None (controller pattern)
+
+
+Verify: python -c "from framework.composer import compose; print(compose(['before_agent_cb']))" — prints a callable.
+
+SUB-AGENT 4 — factory-and-configs
+Build YAMLs, factory, resolver, and main. Reads interfaces from Sub-Agents 1–3. Start after confirming their module names.
+agent_configs/coordinator_agent.yaml
+
+agent_id: coordinator_agent
+enabled: true
+model: gemini-2.0-flash
+prompt_id: coordinator_v1
+tools: []
+output_schema: null
+callbacks:
+  before: []
+  after: []
+  before_model: []
+  after_tool: []
+
+
+agent_configs/gitlab_agent.yaml
+
+agent_id: gitlab_agent
+enabled: true
+model: gemini-2.0-flash
+prompt_id: gitlab_agent_v1
+tools:
+  - gitlab_list_commits
+  - gitlab_get_commit
+  - gitlab_list_mrs
+  - gitlab_get_mr
+  - gitlab_create_mr
+  - gitlab_list_pipelines
+  - gitlab_get_pipeline
+  - gitlab_trigger_pipeline
+output_schema: GitLabResult
+callbacks:
+  before: [before_agent_cb]
+  after: [after_agent_cb]
+  before_model: [before_model_cb]
+  after_tool: [after_tool_cb]
+
+
+workflow_configs/gitlab_workflow.yaml
+
+workflow_id: gitlab_workflow
+type: SequentialAgent
+enabled: true
+agents:
+  - gitlab_agent
+callbacks:
+  before: [before_agent_cb]
+  after: [after_agent_cb]
+
+
+framework/resolver.py
+
+# Called once at startup by Factory per agent
+# resolve(tool_names: list[str]) -> list[callable]
+#   for each name: tool = registry.get(name); append tool.to_adk_function()
+#   return list of ADK-compatible callables
+
+
+framework/factory.py
+
+# TOP OF FILE — triggers self-registration before any YAML is read
+import tools.gitlab.gitlab_local
+
+class Factory:
+    def __init__(self):
+        # scan agent_configs/*.yaml → self.agent_configs
+        # scan workflow_configs/*.yaml → self.workflow_configs
+
+    def create_agent(self, agent_id) -> LlmAgent:
+        # load config
+        # raise AgentDisabledError if enabled=false
+        # tools = resolver.resolve(config['tools'])
+        # instruction = prompt_registry.get(config['prompt_id'])
+        # output_schema = schema_registry.resolve(config['output_schema'])
+        # wire callbacks via composer.compose() for each hook
+        # return LlmAgent(name, model, instruction, tools, output_schema,
+        #                 before_agent_callback, after_agent_callback,
+        #                 before_model_callback, after_tool_callback)
+
+    def create_workflow(self, workflow_id) -> SequentialAgent:
+        # build sub-agents from agents list in YAML
+        # return SequentialAgent(sub_agents=agents,
+        #                        before_agent_callback=...,
+        #                        after_agent_callback=...)
+
+    def bootstrap(self) -> LlmAgent:
+        # create all enabled workflows
+        # create coordinator_agent
+        # coordinator.sub_agents = [all workflows]
+        # return coordinator
+
+
+main.py
+
+from framework.factory import Factory
+from framework.session_manager import session_mgr
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+
+session_mgr.init_app_scope()
+coordinator = Factory().bootstrap()
+runner = Runner(
+    agent=coordinator,
+    app_name="agentic-platform",
+    session_service=InMemorySessionService()
+)
+
+
+.env.example
+
+GITLAB_URL=https://gitlab.com
+GITLAB_TOKEN=your_token
+GITLAB_DEFAULT_PROJECT=group/repo
+TOOL_MODE=local
+ALLOWED_AGENTS=*
+
+
+requirements.txt
+
+google-adk
+python-gitlab
+pydantic>=2.0
+python-dotenv
+pyyaml
+
+
+Verify: python -c "from framework.factory import Factory; Factory().bootstrap(); print('Factory OK')"
+
+Orchestrator: integration steps after all 4 complete
+	1.	Ensure every directory has __init__.py
+	2.	Run each sub-agent’s verify command — all must pass before continuing
+	3.	adk web — must start with zero import errors
+	4.	Send: "list the last 5 commits on main" — trace: coordinator → gitlab_workflow → gitlab_agent → gitlab_list_commits called → entry in reports/traces/tool_calls.jsonl
+	5.	Send: "create an MR from feature/x to main titled Test MR" — agent must confirm before calling gitlab_create_mr
+	6.	If any interface mismatch found (ToolResult fields, callback signatures, session key format) — fix in place before closing​​​​​​​​​​​​​​​​
+
+
+
+
 Option 1 (Most balanced):
 
 She has single-handedly navigated complex DevOps responsibilities, proactively upskilling herself in GS processes and technologies while effectively managing delivery pressure and streamlining our division’s tech-risk remediation. Her ownership mindset, mentorship of teammates, and drive to continuously challenge herself make her a strong candidate for the next role promotion accelerator program.
