@@ -1,0 +1,4108 @@
+### Main Project File Structure and Contents
+
+
+---
+**File:** `requirements.txt`
+```
+google-adk[extensions]>=1.0.0
+google-genai>=1.0.0
+fastmcp>=0.1.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+httpx>=0.27.0
+mcp>=1.0.0
+pyyaml>=6.0.0
+
+```
+
+
+---
+**File:** `run_mcp_github.py`
+```
+"""Entry point — run the GitHub MCP server over stdio.
+
+Usage:
+    python run_mcp_github.py              # stdio transport (used by ADK agents)
+    python run_mcp_github.py --sse        # SSE transport for browser / curl testing
+    python run_mcp_github.py --http       # Streamable HTTP transport
+
+The server reads GITHUB_TOKEN from environment (loaded via .env).
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+# Ensure project root is on sys.path when run directly
+sys.path.insert(0, str(Path(__file__).parent))
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from app.config import config  # noqa: F401  (imported to trigger .env load + validation)
+from mcp_servers.github.server import mcp
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="GitHub MCP server")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--sse", action="store_true", help="Run SSE transport on :8001")
+    group.add_argument("--http", action="store_true", help="Run streamable-HTTP transport on :8001")
+    args = parser.parse_args()
+
+    if args.sse:
+        print("[github-mcp] Starting SSE server on http://127.0.0.1:8001/sse", file=sys.stderr)
+        mcp.settings.port = 8001
+        mcp.run(transport="sse")
+    elif args.http:
+        print("[github-mcp] Starting HTTP server on http://127.0.0.1:8001/mcp", file=sys.stderr)
+        mcp.settings.port = 8001
+        mcp.run(transport="streamable-http")
+    else:
+        # stdio — default, used by ADK McpToolset
+        mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
+
+---
+**File:** `README.md`
+```
+# ADK Agent Platform
+
+A production-ready starter project for building reusable AI agents with **Google ADK** and **Gemini 2.5 Flash**.
+
+---
+
+## Project Structure
+
+```
+.
+├── agents/             # ADK agent definitions
+│   └── basic_agent.py  # Minimal Gemini agent
+├── agent_platform/     # Reusable infrastructure
+│   ├── config.py       # Environment-based configuration
+│   ├── memory.py       # In-process key-value store (swap for Redis/Firestore)
+│   └── runner.py       # Synchronous wrapper around ADK Runner
+├── tools/              # Future MCP or local tool wrappers
+├── data/               # Input files placeholder
+├── main.py             # Entry point
+├── requirements.txt
+├── .env.example
+└── README.md
+```
+
+---
+
+## Quick Start
+
+### 1. Clone & enter the project
+
+```bash
+git clone <repo-url>
+cd youtube-agent-platform
+```
+
+### 2. Create & activate a virtual environment
+
+```bash
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+```
+
+### 3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configure environment variables
+
+```bash
+cp .env.example .env
+# Open .env and set GOOGLE_API_KEY
+```
+
+Get a free API key at <https://aistudio.google.com/app/apikey>.
+
+### 5. Run
+
+```bash
+python main.py
+# or with a custom prompt:
+python main.py "Explain what an AI agent is in two sentences"
+```
+
+---
+
+## Extending the Platform
+
+| Goal | Where to add code |
+|---|---|
+| New agent | `agents/my_agent.py` → `create_my_agent()` |
+| New tool | `tools/my_tool.py` → pass to `Agent(tools=[...])` |
+| Persistent memory | Replace `InMemoryStore` in `agent_platform/memory.py` |
+| New env var | Add to `agent_platform/config.py` and `.env.example` |
+
+---
+
+## Requirements
+
+- Python 3.10+
+- `GOOGLE_API_KEY` with Gemini API access
+
+```
+
+
+---
+**File:** `make_big_prompt.py`
+```
+import os
+
+# List of top-level folders and files to include (customize as needed)
+INCLUDE_DIRS = {
+    "coordinator_agent",
+    "agents",
+    "workflows",
+    "core",
+    "framework",
+    "agent_configs",
+    "workflow_configs",
+    "tools",
+    "services",
+    "observability",
+    "mcp_servers",
+}
+INCLUDE_FILES = {
+    "README.md", "main.py", "requirements.txt", "make_big_prompt.py", "run_mcp_github.py"
+}
+
+def should_include(path, root):
+    rel = os.path.relpath(path, root)
+    parts = rel.split(os.sep)
+    if parts[0].startswith(".") or parts[0] in {".venv", "__pycache__", "logs", "reports", "data"}:
+        return False
+    if parts[0] in INCLUDE_DIRS:
+        return True
+    if len(parts) == 1 and parts[0] in INCLUDE_FILES:
+        return True
+    return False
+
+def collect_files(root_dir):
+    file_list = []
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        # Exclude unwanted directories in-place
+        dirnames[:] = [d for d in dirnames if should_include(os.path.join(dirpath, d), root_dir)]
+        for filename in filenames:
+            file_path = os.path.join(dirpath, filename)
+            if should_include(file_path, root_dir):
+                file_list.append(file_path)
+    return file_list
+
+def make_prompt(root_dir, file_list):
+    prompt_lines = []
+    prompt_lines.append("### Main Project File Structure and Contents\n")
+    for file_path in file_list:
+        rel_path = os.path.relpath(file_path, root_dir)
+        prompt_lines.append(f"\n---\n**File:** `{rel_path}`\n```")
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except Exception as e:
+            content = f"[Could not read file: {e}]"
+        prompt_lines.append(content)
+        prompt_lines.append("```\n")
+    return "\n".join(prompt_lines)
+
+if __name__ == "__main__":
+    root = os.path.abspath(".")
+    files = collect_files(root)
+    prompt = make_prompt(root, files)
+    with open("main_project_big_prompt.txt", "w", encoding="utf-8") as out:
+        out.write(prompt)
+    print("Prompt written to main_project_big_prompt.txt")
+```
+
+
+---
+**File:** `main.py`
+```
+"""Agent Platform — entrypoint.
+
+Agents and workflows are defined in agent_configs/ and workflow_configs/.
+Factory.bootstrap() discovers all enabled workflows and wires them into
+the coordinator automatically — no imports needed when adding new configs.
+
+Usage:
+    python main.py                          # starts ADK web UI at http://localhost:8080
+    python main.py --port 9090              # custom port
+    adk web .                               # ADK CLI — discovers coordinator_agent/ package
+"""
+
+import logging
+from dotenv import load_dotenv
+
+load_dotenv()
+logging.basicConfig(level=logging.INFO)
+
+from framework.factory import Factory
+
+coordinator = Factory().bootstrap()
+
+# Exposed as root_agent so `adk web` CLI can discover it automatically.
+root_agent = coordinator
+
+if __name__ == "__main__":
+    import argparse
+    from google.adk.web import start_web
+
+    parser = argparse.ArgumentParser(description="Agent Platform")
+    parser.add_argument("--port", type=int, default=8080, help="Port for ADK web UI")
+    args = parser.parse_args()
+
+    print("Starting Agent Platform...")
+    print(f"Open http://localhost:{args.port} in your browser")
+    start_web(coordinator, port=args.port)
+
+```
+
+
+---
+**File:** `tools/all_tools.py`
+```
+"""Single import that registers every tool.
+
+Import this module once (factory.py does it) and all @tool-decorated functions
+land in framework.tools.registry._registry, ready for get_many().
+
+To add a new tool module: create tools/local/my_tools.py with @tool functions,
+then add one import line here.
+"""
+import tools.local.gitlab_tools       # noqa: F401
+import tools.local.youtube_tools      # noqa: F401
+import tools.local.file_tools         # noqa: F401
+import tools.local.entitlement_tools  # noqa: F401
+
+```
+
+
+---
+**File:** `tools/__init__.py`
+```
+
+```
+
+
+---
+**File:** `tools/__pycache__/all_tools.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xc2 in position 8: invalid continuation byte]
+```
+
+
+---
+**File:** `tools/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte]
+```
+
+
+---
+**File:** `tools/local/__init__.py`
+```
+
+```
+
+
+---
+**File:** `tools/local/file_tools.py`
+```
+"""File tools — plain functions, registered as ADK FunctionTools on import."""
+import json
+from datetime import datetime
+from pathlib import Path
+
+from framework.tools.registry import tool
+
+_REPORTS_DIR = Path("reports")
+_REPORTS_DIR.mkdir(exist_ok=True)
+
+
+@tool()
+def save_report(
+    period: str,
+    summary: str,
+    overall_risk: str,
+    recommendations: list,
+    analysis: dict,
+) -> dict:
+    """Save an insights report to a JSON file in the reports directory.
+
+    Args:
+        period: Time period label (e.g. 'january 2024').
+        summary: Human-readable summary text.
+        overall_risk: Risk level string (e.g. 'low', 'medium', 'high').
+        recommendations: List of recommendation dicts.
+        analysis: Raw analysis data dict.
+
+    Returns:
+        {file_path, summary, success} or {file_path, summary, success, error} on failure.
+    """
+    filename = f"{period.replace(' ', '_').lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    file_path = _REPORTS_DIR / filename
+    try:
+        content = {
+            "period": period,
+            "generated_at": datetime.now().isoformat(),
+            "summary": summary,
+            "overall_risk": overall_risk,
+            "recommendations": recommendations,
+            "analysis": analysis,
+        }
+        file_path.write_text(json.dumps(content, indent=2, default=str))
+        return {"file_path": str(file_path), "summary": summary, "success": True}
+    except Exception as e:
+        return {"file_path": "", "summary": "", "success": False, "error": str(e)}
+
+
+@tool()
+def list_reports() -> list:
+    """List all saved report filenames in the reports directory.
+
+    Returns:
+        List of file path strings.
+    """
+    return [str(p) for p in _REPORTS_DIR.glob("*.json")]
+
+
+@tool()
+def get_report(filename: str) -> str:
+    """Read a saved report by filename.
+
+    Args:
+        filename: Report filename (e.g. 'january_2024_20240101_120000.json').
+
+    Returns:
+        Report JSON as a string, or an error message if not found.
+    """
+    path = _REPORTS_DIR / filename
+    if not path.exists():
+        return f"Report not found: {filename}"
+    return path.read_text()
+
+```
+
+
+---
+**File:** `tools/local/gitlab_tools.py`
+```
+"""GitLab tools — plain functions, registered as ADK FunctionTools on import."""
+import os
+from typing import Any
+
+from framework.tools.registry import tool
+
+try:
+    import gitlab as python_gitlab
+    _GITLAB_AVAILABLE = True
+except ImportError:
+    _GITLAB_AVAILABLE = False
+
+
+def _client():
+    if not _GITLAB_AVAILABLE:
+        raise RuntimeError("python-gitlab not installed. Run: pip install python-gitlab")
+    return python_gitlab.Gitlab(
+        url=os.getenv("GITLAB_URL", "https://gitlab.com"),
+        private_token=os.getenv("GITLAB_TOKEN", ""),
+    )
+
+
+def _project(gl, project_path: str | None = None):
+    path = project_path or os.getenv("GITLAB_DEFAULT_PROJECT", "")
+    if not path:
+        raise ValueError("No GitLab project specified. Set GITLAB_DEFAULT_PROJECT in .env.")
+    return gl.projects.get(path)
+
+
+def _commit(raw: dict) -> dict:
+    return {
+        "sha": raw.get("id", ""),
+        "short_sha": raw.get("short_id", raw.get("id", "")[:8]),
+        "title": raw.get("title", ""),
+        "author": raw.get("author_name", ""),
+        "date": raw.get("created_at", ""),
+        "url": raw.get("web_url", ""),
+    }
+
+
+def _mr(raw: dict) -> dict:
+    author = raw.get("author", {})
+    return {
+        "iid": raw.get("iid", 0),
+        "title": raw.get("title", ""),
+        "state": raw.get("state", ""),
+        "source_branch": raw.get("source_branch", ""),
+        "target_branch": raw.get("target_branch", ""),
+        "author": author.get("name", "") if isinstance(author, dict) else str(author),
+        "url": raw.get("web_url", ""),
+    }
+
+
+def _pipeline(raw: dict) -> dict:
+    return {
+        "id": raw.get("id", 0),
+        "status": raw.get("status", ""),
+        "ref": raw.get("ref", ""),
+        "created_at": raw.get("created_at", ""),
+        "url": raw.get("web_url", ""),
+    }
+
+
+@tool()
+def gitlab_list_commits(
+    ref_name: str = "main",
+    per_page: int = 20,
+    project: str | None = None,
+) -> dict:
+    """List recent commits on a branch.
+
+    Args:
+        ref_name: Branch or tag name. Defaults to 'main'.
+        per_page: Max results to return. Defaults to 20.
+        project: GitLab project path (e.g. 'group/repo'). Uses GITLAB_DEFAULT_PROJECT if omitted.
+
+    Returns:
+        commits: list of {sha, short_sha, title, author, date, url}
+    """
+    try:
+        gl = _client()
+        proj = _project(gl, project)
+        raw = proj.commits.list(ref_name=ref_name, per_page=per_page, get_all=False)
+        commits = [_commit(c.asdict() if hasattr(c, "asdict") else c.__dict__["_attrs"]) for c in raw]
+        return {"commits": commits, "count": len(commits)}
+    except Exception as exc:
+        return {"error": str(exc), "commits": []}
+
+
+@tool()
+def gitlab_get_commit(sha: str, project: str | None = None) -> dict:
+    """Get a single commit by SHA.
+
+    Args:
+        sha: Full or short commit SHA.
+        project: GitLab project path. Uses GITLAB_DEFAULT_PROJECT if omitted.
+
+    Returns:
+        Commit fields: sha, short_sha, title, author, date, url.
+    """
+    try:
+        gl = _client()
+        proj = _project(gl, project)
+        return _commit(proj.commits.get(sha)._attrs)
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@tool()
+def gitlab_list_mrs(
+    state: str = "opened",
+    per_page: int = 20,
+    project: str | None = None,
+) -> dict:
+    """List merge requests.
+
+    Args:
+        state: Filter by state — 'opened', 'closed', 'merged', or 'all'. Defaults to 'opened'.
+        per_page: Max results to return. Defaults to 20.
+        project: GitLab project path. Uses GITLAB_DEFAULT_PROJECT if omitted.
+
+    Returns:
+        mrs: list of {iid, title, state, source_branch, target_branch, author, url}
+    """
+    try:
+        gl = _client()
+        proj = _project(gl, project)
+        raw = proj.mergerequests.list(state=state, per_page=per_page, get_all=False)
+        mrs = [_mr(mr._attrs) for mr in raw]
+        return {"mrs": mrs, "count": len(mrs)}
+    except Exception as exc:
+        return {"error": str(exc), "mrs": []}
+
+
+@tool()
+def gitlab_get_mr(iid: int, project: str | None = None) -> dict:
+    """Get a single merge request by internal ID.
+
+    Args:
+        iid: Merge request internal ID (the number shown in the GitLab UI).
+        project: GitLab project path. Uses GITLAB_DEFAULT_PROJECT if omitted.
+
+    Returns:
+        MR fields: iid, title, state, source_branch, target_branch, author, url.
+    """
+    try:
+        gl = _client()
+        proj = _project(gl, project)
+        return _mr(proj.mergerequests.get(iid)._attrs)
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@tool(requires_approval=True)
+def gitlab_create_mr(
+    source_branch: str,
+    target_branch: str,
+    title: str,
+    description: str = "",
+    project: str | None = None,
+) -> dict:
+    """Create a merge request.
+
+    Args:
+        source_branch: Branch to merge from.
+        target_branch: Branch to merge into.
+        title: MR title.
+        description: Optional MR description.
+        project: GitLab project path. Uses GITLAB_DEFAULT_PROJECT if omitted.
+
+    Returns:
+        Created MR fields: iid, title, state, source_branch, target_branch, author, url.
+    """
+    try:
+        gl = _client()
+        proj = _project(gl, project)
+        mr = proj.mergerequests.create({
+            "source_branch": source_branch,
+            "target_branch": target_branch,
+            "title": title,
+            "description": description,
+        })
+        return _mr(mr._attrs)
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@tool()
+def gitlab_list_pipelines(
+    ref: str | None = None,
+    per_page: int = 20,
+    project: str | None = None,
+) -> dict:
+    """List pipelines.
+
+    Args:
+        ref: Filter by branch/tag name. Omit for all pipelines.
+        per_page: Max results to return. Defaults to 20.
+        project: GitLab project path. Uses GITLAB_DEFAULT_PROJECT if omitted.
+
+    Returns:
+        pipelines: list of {id, status, ref, created_at, url}
+    """
+    try:
+        gl = _client()
+        proj = _project(gl, project)
+        kwargs: dict[str, Any] = {"per_page": per_page}
+        if ref:
+            kwargs["ref"] = ref
+        raw = proj.pipelines.list(**kwargs, get_all=False)
+        pipelines = [_pipeline(p._attrs) for p in raw]
+        return {"pipelines": pipelines, "count": len(pipelines)}
+    except Exception as exc:
+        return {"error": str(exc), "pipelines": []}
+
+
+@tool()
+def gitlab_get_pipeline(pipeline_id: int, project: str | None = None) -> dict:
+    """Get a pipeline by ID.
+
+    Args:
+        pipeline_id: Pipeline numeric ID.
+        project: GitLab project path. Uses GITLAB_DEFAULT_PROJECT if omitted.
+
+    Returns:
+        Pipeline fields: id, status, ref, created_at, url.
+    """
+    try:
+        gl = _client()
+        proj = _project(gl, project)
+        return _pipeline(proj.pipelines.get(pipeline_id)._attrs)
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@tool(requires_approval=True)
+def gitlab_trigger_pipeline(
+    ref: str,
+    variables: dict | None = None,
+    project: str | None = None,
+) -> dict:
+    """Trigger a pipeline on a branch or tag.
+
+    Args:
+        ref: Branch or tag to run the pipeline on.
+        variables: Optional dict of CI/CD variable key-value pairs.
+        project: GitLab project path. Uses GITLAB_DEFAULT_PROJECT if omitted.
+
+    Returns:
+        Triggered pipeline fields: id, status, ref, created_at, url.
+    """
+    try:
+        gl = _client()
+        proj = _project(gl, project)
+        pipeline = proj.pipelines.create({"ref": ref, "variables": variables or []})
+        return _pipeline(pipeline._attrs)
+    except Exception as exc:
+        return {"error": str(exc)}
+
+```
+
+
+---
+**File:** `tools/local/entitlement_tools.py`
+```
+"""Entitlement tools — plain functions, registered as ADK FunctionTools on import.
+
+In production, replace _ENTITLEMENT_DB with a real IAM / LDAP / SailPoint call.
+"""
+from framework.tools.registry import tool
+
+_ENTITLEMENT_DB: dict[str, dict[str, str]] = {
+    "salesforce": {"alice": "write", "bob": "read", "carol": "admin", "svc_batch": "read"},
+    "jira":       {"alice": "write", "dave": "write", "eve": "read"},
+    "confluence": {"alice": "read",  "bob": "write",  "carol": "read", "frank": "admin"},
+}
+
+_INVALID_USERS = {"svc_batch", "ghost_user", "former_emp_john"}
+
+
+@tool()
+def check_user_entitlements(app_name: str, users: list) -> list:
+    """Check whether users have access to an application.
+
+    Args:
+        app_name: Application name to check (e.g. 'Salesforce', 'Jira').
+        users: List of user IDs / usernames to validate.
+
+    Returns:
+        List of {user_id, app_name, has_access, access_type, is_valid_user, reason}
+        — one entry per user.
+    """
+    app_key = app_name.lower()
+    db = _ENTITLEMENT_DB.get(app_key, {})
+    results = []
+    for user_id in users:
+        user_key = user_id.strip().lower()
+        is_valid = user_key not in _INVALID_USERS
+        access_type = db.get(user_key)
+        has_access = access_type is not None
+        if not is_valid:
+            reason = f"'{user_id}' is flagged as an invalid / stale account."
+        elif has_access:
+            reason = f"'{user_id}' has '{access_type}' access to {app_name}."
+        else:
+            reason = f"'{user_id}' has NO entitlement record for {app_name}."
+        results.append({
+            "user_id": user_id,
+            "app_name": app_name,
+            "has_access": has_access,
+            "access_type": access_type,
+            "is_valid_user": is_valid,
+            "reason": reason,
+        })
+    return results
+
+```
+
+
+---
+**File:** `tools/local/__pycache__/entitlement_tools.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xc2 in position 8: invalid continuation byte]
+```
+
+
+---
+**File:** `tools/local/__pycache__/gitlab_tools.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x9b in position 8: invalid start byte]
+```
+
+
+---
+**File:** `tools/local/__pycache__/file_tools.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xc2 in position 8: invalid continuation byte]
+```
+
+
+---
+**File:** `tools/local/__pycache__/github_local.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xec in position 8: invalid continuation byte]
+```
+
+
+---
+**File:** `tools/local/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte]
+```
+
+
+---
+**File:** `tools/local/__pycache__/gitlab_local.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xb9 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `tools/local/__pycache__/youtube_tools.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xc2 in position 8: invalid continuation byte]
+```
+
+
+---
+**File:** `core/__init__.py`
+```
+
+```
+
+
+---
+**File:** `core/__pycache__/session_manager.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x88 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `core/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x88 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `core/session/__init__.py`
+```
+from core.session.manager import SessionManager
+from core.session.backends.inmemory import InMemoryBackend
+
+# Default singleton — InMemory to start; swap backend without touching anything else.
+session_manager = SessionManager(backend=InMemoryBackend())
+
+__all__ = ["SessionManager", "InMemoryBackend", "session_manager"]
+
+```
+
+
+---
+**File:** `core/session/manager.py`
+```
+"""
+SessionManager — lifecycle and ADK plumbing only.
+
+State is stored and read via ADK's native session.state (ToolContext.state /
+CallbackContext.state). SessionManager's job is to open/close sessions and
+expose adk_service so the Runner can be wired up correctly.
+
+Usage
+-----
+    from core.session.backends.inmemory import InMemoryBackend
+    from core.session.manager import SessionManager
+
+    session_manager = SessionManager(backend=InMemoryBackend())
+
+    # inside a run
+    await session_manager.open(user_id="u1", session_id="s1")
+    # ... agents run, state flows via ToolContext.state ...
+    session_manager.close()
+"""
+import logging
+
+from core.session.base import AbstractSessionBackend
+from core.session.backends.inmemory import InMemoryBackend
+
+logger = logging.getLogger("platform.session")
+
+
+class SessionManager:
+    """
+    Thin, backend-agnostic session manager.
+
+    The runtime calls open() at the start of each run and close() at the end.
+    All state reads/writes during a run go through ADK's ToolContext.state
+    and CallbackContext.state — not through this class.
+    """
+
+    def __init__(self, backend: AbstractSessionBackend | None = None, app_name: str = "youtube_platform") -> None:
+        self._backend: AbstractSessionBackend = backend or InMemoryBackend()
+        self.app_name = app_name
+        self._current_session_id: str | None = None
+
+    async def open(self, user_id: str, session_id: str):
+        """Start a session. Returns the ADK Session so the Runner can be initialised."""
+        session = await self._backend.get_or_create(
+            app_name=self.app_name,
+            user_id=user_id,
+            session_id=session_id,
+        )
+        self._current_session_id = session_id
+        logger.debug("Session opened: %s / %s", user_id, session_id)
+        return session
+
+    def close(self) -> None:
+        """Clear session state after a run."""
+        if self._current_session_id:
+            self._backend.clear(self._current_session_id)
+            logger.debug("Session closed: %s", self._current_session_id)
+            self._current_session_id = None
+
+    @property
+    def adk_service(self):
+        """ADK session service — pass this to google.adk.runners.Runner."""
+        return self._backend.adk_service
+
+    @property
+    def session_id(self) -> str | None:
+        return self._current_session_id
+
+```
+
+
+---
+**File:** `core/session/base.py`
+```
+"""
+Abstract session backend.
+
+Implement this to swap InMemory → Redis / DB without touching
+SessionManager or anything in framework/.
+"""
+from abc import ABC, abstractmethod
+from typing import Any
+
+
+class AbstractSessionBackend(ABC):
+    """
+    Contract every session backend must fulfill.
+
+    Framework and runtime only depend on this interface,
+    never on a concrete implementation.
+    """
+
+    # ------------------------------------------------------------------
+    # ADK integration
+    # ------------------------------------------------------------------
+
+    @property
+    @abstractmethod
+    def adk_service(self):
+        """Return the ADK-compatible session service (passed to Runner)."""
+
+    @abstractmethod
+    async def get_or_create(self, app_name: str, user_id: str, session_id: str):
+        """Return an existing ADK Session or create a new one."""
+
+    # ------------------------------------------------------------------
+    # Key-value output store
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    def write(self, session_id: str, key: str, value: Any) -> None:
+        """Persist an agent output keyed by (session_id, key)."""
+
+    @abstractmethod
+    def read(self, session_id: str, key: str, default: Any = None) -> Any:
+        """Retrieve an agent output."""
+
+    @abstractmethod
+    def all(self, session_id: str) -> dict[str, Any]:
+        """Return every key written for this session."""
+
+    @abstractmethod
+    def clear(self, session_id: str) -> None:
+        """Drop all keys for a session (called after run completes)."""
+
+```
+
+
+---
+**File:** `core/session/backends/__init__.py`
+```
+from core.session.backends.inmemory import InMemoryBackend
+
+__all__ = ["InMemoryBackend"]
+
+```
+
+
+---
+**File:** `core/session/backends/inmemory.py`
+```
+"""
+InMemory session backend — default / development backend.
+
+Wraps ADK's InMemorySessionService and keeps a plain dict as the
+key-value output store.  To switch to Redis or a DB later, create a new
+backend module that implements AbstractSessionBackend and inject it into
+SessionManager — nothing else changes.
+"""
+from typing import Any
+
+from google.adk.sessions import InMemorySessionService
+
+from core.session.base import AbstractSessionBackend
+
+
+class InMemoryBackend(AbstractSessionBackend):
+
+    def __init__(self) -> None:
+        self._adk_service = InMemorySessionService()
+        # { session_id: { key: value } }
+        self._store: dict[str, dict[str, Any]] = {}
+
+    # ------------------------------------------------------------------
+    # ADK integration
+    # ------------------------------------------------------------------
+
+    @property
+    def adk_service(self):
+        return self._adk_service
+
+    async def get_or_create(self, app_name: str, user_id: str, session_id: str):
+        try:
+            session = await self._adk_service.get_session(
+                app_name=app_name,
+                user_id=user_id,
+                session_id=session_id,
+            )
+            if session:
+                return session
+        except Exception:
+            pass
+        return await self._adk_service.create_session(
+            app_name=app_name,
+            user_id=user_id,
+            session_id=session_id,
+        )
+
+    # ------------------------------------------------------------------
+    # Key-value output store
+    # ------------------------------------------------------------------
+
+    def write(self, session_id: str, key: str, value: Any) -> None:
+        self._store.setdefault(session_id, {})[key] = value
+
+    def read(self, session_id: str, key: str, default: Any = None) -> Any:
+        return self._store.get(session_id, {}).get(key, default)
+
+    def all(self, session_id: str) -> dict[str, Any]:
+        return dict(self._store.get(session_id, {}))
+
+    def clear(self, session_id: str) -> None:
+        self._store.pop(session_id, None)
+
+```
+
+
+---
+**File:** `core/session/backends/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte]
+```
+
+
+---
+**File:** `core/session/backends/__pycache__/inmemory.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte]
+```
+
+
+---
+**File:** `core/session/__pycache__/base.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte]
+```
+
+
+---
+**File:** `core/session/__pycache__/manager.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte]
+```
+
+
+---
+**File:** `core/session/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte]
+```
+
+
+---
+**File:** `workflow_configs/__init__.py`
+```
+
+```
+
+
+---
+**File:** `workflow_configs/gitlab_workflow/__init__.py`
+```
+
+```
+
+
+---
+**File:** `workflow_configs/gitlab_workflow/gitlab_workflow.yaml`
+```
+workflow_id: gitlab_workflow
+type: SequentialAgent
+enabled: true
+agents:
+  - gitlab_agent
+  - summary_agent
+
+```
+
+
+---
+**File:** `workflow_configs/gitlab_workflow/callbacks/__init__.py`
+```
+
+```
+
+
+---
+**File:** `workflow_configs/gitlab_workflow/transformers/__init__.py`
+```
+
+```
+
+
+---
+**File:** `framework/workflow_registry.py`
+```
+"""WorkflowRegistry — register workflows once, discover everywhere.
+
+Usage in a workflow file:
+    from framework.workflow_registry import workflow_registry
+    workflow_registry.register(
+        name="youtube_workflow",
+        workflow=youtube_workflow,
+        description="Analyzes YouTube history and generates insights",
+        triggers=["analyze my youtube", "watch habits", "shorts ratio"],
+    )
+
+The coordinator and main.py read from this registry — no manual edits needed
+when adding new workflows.
+"""
+
+
+class WorkflowRegistry:
+    def __init__(self):
+        self._workflows: dict[str, dict] = {}
+
+    def register(self, name: str, workflow, description: str, triggers: list[str]):
+        """Register a workflow with routing metadata.
+
+        Args:
+            name:        Unique workflow identifier (matches workflow.name).
+            workflow:    The ADK agent/workflow object.
+            description: One-line description shown to the coordinator.
+            triggers:    Example phrases that should route to this workflow.
+        """
+        self._workflows[name] = {
+            "workflow": workflow,
+            "description": description,
+            "triggers": triggers,
+        }
+
+    def get(self, name: str):
+        entry = self._workflows.get(name)
+        return entry["workflow"] if entry else None
+
+    def all_workflows(self) -> list:
+        """Return all registered workflow objects."""
+        return [v["workflow"] for v in self._workflows.values()]
+
+    def routing_summary(self) -> str:
+        """Generate a coordinator-ready routing description from registered workflows."""
+        lines = []
+        for name, meta in self._workflows.items():
+            trigger_examples = ", ".join(f'"{t}"' for t in meta["triggers"][:3])
+            lines.append(f"- {name}: {meta['description']} (e.g. {trigger_examples})")
+        return "\n".join(lines)
+
+
+workflow_registry = WorkflowRegistry()
+
+```
+
+
+---
+**File:** `framework/session_manager.py`
+```
+from enum import Enum
+from typing import Any
+
+
+class SessionScope(str, Enum):
+    SESSION = "session"
+    USER = "user"
+    APP = "app"
+
+
+class SessionManager:
+    def __init__(self):
+        self._state: dict[str, Any] = {}
+
+    @staticmethod
+    def _key(scope: SessionScope, key: str) -> str:
+        return f"{scope.value}:{key}"
+
+    def set(self, scope: SessionScope, key: str, value: Any):
+        self._state[self._key(scope, key)] = value
+
+    def get(self, scope: SessionScope, key: str, default: Any = None) -> Any:
+        return self._state.get(self._key(scope, key), default)
+
+    def clear(self, scope: SessionScope):
+        prefix = f"{scope.value}:"
+        keys_to_remove = [k for k in self._state if k.startswith(prefix)]
+        for k in keys_to_remove:
+            del self._state[k]
+
+    def to_adk_state(self) -> dict:
+        return dict(self._state)
+
+    def from_adk_state(self, state: dict):
+        self._state.clear()
+        for k, v in state.items():
+            if any(k.startswith(f"{s.value}:") for s in SessionScope):
+                self._state[k] = v
+
+
+session_manager = SessionManager()
+
+```
+
+
+---
+**File:** `framework/__init__.py`
+```
+
+```
+
+
+---
+**File:** `framework/factory.py`
+```
+"""Factory: builds agents and workflows from YAML config files."""
+import importlib
+from pathlib import Path
+from typing import Any, Callable
+
+import yaml
+
+# Register every @tool-decorated function before resolving names
+import tools.all_tools  # noqa: F401
+
+from framework.callbacks.master import (
+    build_before_agent,
+    build_after_agent,
+    build_before_model,
+    build_after_model,
+    build_before_tool,
+    build_after_tool,
+)
+from framework.tools.registry import get_many
+from services.llm_service import llm_service
+
+
+def _load_yaml(path: Path) -> dict:
+    with open(path, "r") as fh:
+        return yaml.safe_load(fh) or {}
+
+
+def _load_agent_callback(agent_id: str, cb_name: str) -> Callable:
+    """Dynamically import an agent-specific callback function."""
+    module_path = f"agent_configs.{agent_id}.callbacks.{cb_name}"
+    try:
+        mod = importlib.import_module(module_path)
+        return getattr(mod, cb_name)
+    except (ImportError, AttributeError) as exc:
+        raise ImportError(
+            f"Cannot load agent callback '{cb_name}' from '{module_path}': {exc}"
+        )
+
+
+class Factory:
+    AGENT_CONFIGS_DIR = Path("agent_configs")
+    WORKFLOW_CONFIGS_DIR = Path("workflow_configs")
+
+    def create_agent(self, agent_id: str):
+        """Load YAML, resolve tools and callbacks, return LlmAgent.
+
+        All 6 callback types are always wired. Logging/tracing/state
+        persistence is built-in. YAML only declares agent-specific hooks.
+        """
+        from google.adk.agents import LlmAgent
+
+        yaml_path = self.AGENT_CONFIGS_DIR / agent_id / f"{agent_id}.yaml"
+        cfg = _load_yaml(yaml_path)
+
+        tool_names: list[str] = cfg.get("tools") or []
+        tools = get_many(tool_names) if tool_names else []
+
+        cb_cfg = cfg.get("callbacks") or {}
+
+        # Load agent-specific hooks from YAML
+        agent_before = [_load_agent_callback(agent_id, n) for n in (cb_cfg.get("agent_before") or [])]
+        agent_after = [_load_agent_callback(agent_id, n) for n in (cb_cfg.get("agent_after") or [])]
+        agent_before_model = [_load_agent_callback(agent_id, n) for n in (cb_cfg.get("agent_before_model") or [])]
+        agent_after_model = [_load_agent_callback(agent_id, n) for n in (cb_cfg.get("agent_after_model") or [])]
+        agent_before_tool = [_load_agent_callback(agent_id, n) for n in (cb_cfg.get("agent_before_tool") or [])]
+        agent_after_tool = [_load_agent_callback(agent_id, n) for n in (cb_cfg.get("agent_after_tool") or [])]
+
+        prompt = cfg.get("prompt", "")
+        model = cfg.get("model") or llm_service.get_model(agent_id)
+
+        return LlmAgent(
+            name=agent_id,
+            model=model,
+            instruction=prompt,
+            tools=tools,
+            before_agent_callback=build_before_agent(agent_before),
+            after_agent_callback=build_after_agent(agent_after),
+            before_model_callback=build_before_model(agent_before_model),
+            after_model_callback=build_after_model(agent_after_model),
+            before_tool_callback=build_before_tool(agent_before_tool),
+            after_tool_callback=build_after_tool(agent_after_tool),
+        )
+
+    def create_workflow(self, workflow_id: str):
+        """Build a SequentialAgent workflow from YAML."""
+        from google.adk.agents import SequentialAgent
+
+        yaml_path = self.WORKFLOW_CONFIGS_DIR / workflow_id / f"{workflow_id}.yaml"
+        cfg = _load_yaml(yaml_path)
+        sub_agents = [self.create_agent(aid) for aid in (cfg.get("agents") or [])]
+        return SequentialAgent(name=workflow_id, sub_agents=sub_agents)
+
+    def bootstrap(self):
+        """Create the root workflow — gitlab_agent → summary_agent sequential."""
+        return self.create_workflow("gitlab_workflow")
+
+```
+
+
+---
+**File:** `framework/exceptions.py`
+```
+"""Framework exceptions for governance enforcement."""
+
+
+class PermissionDeniedError(Exception):
+    def __init__(self, agent_name: str, tool_name: str = "", reason: str = ""):
+        self.agent_name = agent_name
+        self.tool_name = tool_name
+        self.reason = reason
+        msg = f"Permission denied for agent '{agent_name}'"
+        if tool_name:
+            msg += f" on tool '{tool_name}'"
+        if reason:
+            msg += f": {reason}"
+        super().__init__(msg)
+
+
+class ApprovalRequiredError(Exception):
+    def __init__(self, agent_name: str, tool_name: str, reason: str = ""):
+        self.agent_name = agent_name
+        self.tool_name = tool_name
+        self.reason = reason
+        msg = f"Approval required for agent '{agent_name}' to use tool '{tool_name}'"
+        if reason:
+            msg += f": {reason}"
+        super().__init__(msg)
+
+
+class ValidationError(Exception):
+    def __init__(self, agent_name: str, errors: list[str] = None, reason: str = ""):
+        self.agent_name = agent_name
+        self.errors = errors or []
+        self.reason = reason
+        msg = f"Validation failed for agent '{agent_name}'"
+        if reason:
+            msg += f": {reason}"
+        if self.errors:
+            msg += f" [{', '.join(self.errors)}]"
+        super().__init__(msg)
+
+
+class MCPToolError(Exception):
+    def __init__(self, tool_name: str, reason: str = "", agent_name: str = ""):
+        self.tool_name = tool_name
+        self.reason = reason
+        self.agent_name = agent_name
+        msg = f"MCP tool error for '{tool_name}'"
+        if agent_name:
+            msg += f" (agent: {agent_name})"
+        if reason:
+            msg += f": {reason}"
+        super().__init__(msg)
+
+```
+
+
+---
+**File:** `framework/execution_context.py`
+```
+from dataclasses import dataclass, field
+from uuid import uuid4
+
+
+@dataclass
+class ExecutionContext:
+    run_id: str = field(default_factory=lambda: str(uuid4()))
+    session_id: str = ""
+    user_id: str = ""
+    agent_id: str = ""
+    tool_mode: str = "local"
+    step_index: int = 0
+    environment: str = "development"
+
+```
+
+
+---
+**File:** `framework/tools/registry.py`
+```
+"""Tool registry -- the only place that knows about ADK's FunctionTool.
+
+Decorating a function with @tool() wraps it as an ADK FunctionTool and
+registers it by name. Use get_many(names) to retrieve them for an agent.
+
+FunctionTool extracts name from fn.__name__, description from docstring,
+and parameters + types from type hints. Keep those accurate.
+@tool returns the original function unchanged so modules can still call
+their own functions directly in tests without going through ADK.
+"""
+
+from google.adk.tools import FunctionTool
+from typing import Callable
+
+_registry: dict[str, FunctionTool] = {}
+
+
+def tool(*, requires_approval: bool = False):
+    """Decorator that wraps a function as an ADK FunctionTool and registers it."""
+    def decorator(fn: Callable) -> Callable:
+        _registry[fn.__name__] = FunctionTool(fn, require_confirmation=requires_approval)
+        return fn  # return the original fn so callers can still invoke it directly
+    return decorator
+
+
+def get_many(names: list[str]) -> list[FunctionTool]:
+    """Return the registered FunctionTools for the given names, in order."""
+    missing = [n for n in names if n not in _registry]
+    if missing:
+        raise KeyError(f"Tools not registered: {missing}. Did you import tools.all_tools?")
+    return [_registry[n] for n in names]
+
+```
+
+
+---
+**File:** `framework/tools/__init__.py`
+```
+
+```
+
+
+---
+**File:** `framework/tools/mcp/__init__.py`
+```
+
+```
+
+
+---
+**File:** `framework/tools/mcp/github_mcp.py`
+```
+"""GitHub MCP tools — wraps the project's own MCP server via McpToolset.
+
+When TOOL_MODE=mcp, the registry uses this instead of the local version.
+The McpToolset spawns run_mcp_github.py as a subprocess (stdio transport).
+"""
+
+import sys
+from pathlib import Path
+
+from google.adk.tools.mcp_tool.mcp_toolset import McpToolset
+from mcp.client.stdio import StdioServerParameters
+
+_ROOT = Path(__file__).parent.parent.parent.parent
+
+
+def get_github_mcp_toolset() -> McpToolset:
+    """Return a McpToolset that connects to the project's GitHub MCP server."""
+    return McpToolset(
+        connection_params=StdioServerParameters(
+            command=sys.executable,
+            args=[str(_ROOT / "run_mcp_github.py")],
+        ),
+    )
+
+```
+
+
+---
+**File:** `framework/tools/mcp/mcp_client.py`
+```
+import asyncio
+import logging
+
+import httpx
+
+from framework.tools.base_tool import ToolResult
+
+logger = logging.getLogger("platform.mcp_client")
+
+
+class MCPClient:
+    def __init__(self, base_url: str):
+        self.base_url = base_url.rstrip("/")
+
+    async def call_tool(self, tool_name: str, **kwargs) -> ToolResult:
+        max_retries = 3
+        last_error: str | None = None
+
+        async with httpx.AsyncClient() as client:
+            for attempt in range(max_retries):
+                try:
+                    response = await client.post(
+                        f"{self.base_url}/call/{tool_name}",
+                        json=kwargs,
+                        timeout=30.0,
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                    return ToolResult(
+                        success=True,
+                        data=data,
+                        metadata={"source": "mcp"},
+                    )
+                except (httpx.HTTPError, httpx.StreamError) as exc:
+                    last_error = str(exc)
+                    logger.warning(
+                        "MCP call_tool %s attempt %d failed: %s",
+                        tool_name, attempt + 1, last_error,
+                    )
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)
+
+        return ToolResult(
+            success=False,
+            data=None,
+            error=f"MCP call failed after {max_retries} retries: {last_error}",
+            metadata={"source": "mcp"},
+        )
+
+    async def health_check(self) -> bool:
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.base_url}/health",
+                    timeout=10.0,
+                )
+                return response.status_code == 200
+        except (httpx.HTTPError, httpx.StreamError):
+            return False
+
+```
+
+
+---
+**File:** `framework/tools/mcp/mcp_tool.py`
+```
+import logging
+
+from framework.tools.base_tool import BaseTool, ToolResult
+from framework.tools.mcp.mcp_client import MCPClient
+
+logger = logging.getLogger("platform.mcp_tool")
+
+
+class MCPTool(BaseTool):
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        schema: dict,
+        mcp_client: MCPClient,
+        local_fallback: BaseTool | None = None,
+        requires_approval: bool = False,
+    ):
+        self.name = name
+        self.description = description
+        self._schema = schema
+        self._mcp_client = mcp_client
+        self._local_fallback = local_fallback
+        self.requires_approval = requires_approval
+
+    async def execute(self, **kwargs) -> ToolResult:
+        result = await self._mcp_client.call_tool(self.name, **kwargs)
+
+        if result.success:
+            return result
+
+        if self._local_fallback is not None:
+            logger.info(
+                "MCP failed for %s, falling back to local: %s",
+                self.name, result.error,
+            )
+            fallback_result = await self._local_fallback.execute(**kwargs)
+            fallback_result.metadata["source"] = "local_fallback"
+            return fallback_result
+
+        return result
+
+    def get_schema(self) -> dict:
+        return self._schema
+
+```
+
+
+---
+**File:** `framework/tools/mcp/__pycache__/github_mcp.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x87 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/tools/mcp/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x88 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/tools/__pycache__/base_tool.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte]
+```
+
+
+---
+**File:** `framework/tools/__pycache__/resolver.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xc8 in position 8: invalid continuation byte]
+```
+
+
+---
+**File:** `framework/tools/__pycache__/registry.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xe3 in position 16: invalid continuation byte]
+```
+
+
+---
+**File:** `framework/tools/__pycache__/mcp_registry.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte]
+```
+
+
+---
+**File:** `framework/tools/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x88 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/tools/__pycache__/local_registry.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte]
+```
+
+
+---
+**File:** `framework/tools/local/doc_local.py`
+```
+"""Document generation tools — creates Word docs for reports and summaries."""
+
+from datetime import datetime
+from pathlib import Path
+
+from docx import Document
+from docx.shared import Pt
+
+_REPORTS_DIR = Path(__file__).parent.parent.parent.parent / "reports"
+
+
+class DocLocalTools:
+    name = "doc_tools"
+    description = "Generate Word document reports and summaries"
+    tool_names = [
+        "generate_summary_doc",
+    ]
+
+    def __init__(self):
+        _REPORTS_DIR.mkdir(exist_ok=True)
+
+    async def generate_summary_doc(self, title: str, summary: str, extra_content: str = "") -> dict:
+        """Generate a Word document with a project summary.
+
+        Args:
+            title: Document title (e.g. 'Project Summary - PROJ').
+            summary: Main summary text to include in the document.
+            extra_content: Optional additional content in markdown-like format.
+                           Use '## Heading' for section headings and plain text for content.
+                           Example: '## Commits\\nCommit 1...\\n## Copilot Usage\\n3 out of 5 used copilot'
+
+        Returns:
+            Dict with file_path and success status.
+        """
+        doc = Document()
+
+        # Title
+        doc.add_heading(title, level=0)
+
+        # Metadata
+        doc.add_paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        doc.add_paragraph("")
+
+        # Summary section
+        doc.add_heading("Summary", level=1)
+        doc.add_paragraph(summary)
+
+        # Parse extra content — lines starting with '## ' become headings
+        if extra_content:
+            for line in extra_content.split("\n"):
+                stripped = line.strip()
+                if stripped.startswith("## "):
+                    doc.add_heading(stripped[3:], level=1)
+                elif stripped:
+                    doc.add_paragraph(stripped)
+
+        # Style the document
+        style = doc.styles["Normal"]
+        style.font.size = Pt(11)
+        style.font.name = "Calibri"
+
+        # Save
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_title = title.lower().replace(" ", "_").replace("-", "_")[:30]
+        filename = f"{safe_title}_{timestamp}.docx"
+        file_path = _REPORTS_DIR / filename
+        doc.save(str(file_path))
+
+        return {
+            "file_path": str(file_path),
+            "filename": filename,
+            "success": True,
+        }
+
+```
+
+
+---
+**File:** `framework/tools/local/__init__.py`
+```
+
+```
+
+
+---
+**File:** `framework/tools/local/jira_local.py`
+```
+"""Jira/Copilot tracking tools — reads Excel to check if a Jira ID used Copilot."""
+
+from pathlib import Path
+
+import openpyxl
+
+_DATA_FILE = Path(__file__).parent.parent.parent.parent / "data" / "copilot_tracking.xlsx"
+
+
+class JiraLocalTools:
+    name = "jira_tools"
+    description = "Check Jira IDs against Copilot usage tracking spreadsheet"
+    tool_names = [
+        "check_copilot_usage",
+        "list_all_copilot_entries",
+    ]
+
+    def _load_data(self) -> dict[str, str]:
+        """Load Excel into a dict of {jira_id: copilot_used}."""
+        if not _DATA_FILE.exists():
+            raise FileNotFoundError(f"Tracking file not found: {_DATA_FILE}")
+        wb = openpyxl.load_workbook(_DATA_FILE, read_only=True)
+        ws = wb.active
+        data = {}
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if row[0] is not None:
+                jira_id = str(row[0]).strip().upper()
+                copilot_used = str(row[1]).strip().lower() if row[1] else "no"
+                data[jira_id] = copilot_used
+        wb.close()
+        return data
+
+    async def check_copilot_usage(self, jira_id: str) -> dict:
+        """Check if a specific Jira ID has Copilot usage tagged.
+
+        Args:
+            jira_id: The Jira ticket ID to look up (e.g. 'PROJ-101').
+
+        Returns:
+            Dict with jira_id, copilot_used (bool), and status.
+        """
+        data = self._load_data()
+        jira_id = jira_id.strip().upper()
+        if jira_id in data:
+            used = data[jira_id] in ("yes", "true", "1")
+            return {
+                "jira_id": jira_id,
+                "copilot_used": used,
+                "status": "found",
+            }
+        return {
+            "jira_id": jira_id,
+            "copilot_used": False,
+            "status": "not_found",
+        }
+
+    async def list_all_copilot_entries(self) -> list[dict]:
+        """List all Jira IDs and their Copilot usage status from the tracking spreadsheet.
+
+        Returns:
+            List of dicts with jira_id and copilot_used for every entry.
+        """
+        data = self._load_data()
+        return [
+            {"jira_id": jid, "copilot_used": val in ("yes", "true", "1")}
+            for jid, val in data.items()
+        ]
+
+```
+
+
+---
+**File:** `framework/tools/local/__pycache__/doc_local.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xad in position 10: invalid start byte]
+```
+
+
+---
+**File:** `framework/tools/local/__pycache__/jira_local.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xad in position 10: invalid start byte]
+```
+
+
+---
+**File:** `framework/tools/local/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x88 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/callbacks/logging_cb.py`
+```
+"""after_tool_callback — logs every tool call to the observability tracker."""
+import logging
+from observability.tracker import tracker
+
+logger = logging.getLogger("platform.callbacks")
+
+
+def logging_cb(tool, args, tool_context, tool_response) -> None:
+    """Log tool call outcome to the append-only JSONL tracer."""
+    tool_name = getattr(tool, "name", str(tool))
+    agent_name = getattr(tool_context, "agent_name", None) or "unknown"
+    success = "error" not in (tool_response or {})
+    response_preview = str(tool_response)[:200] if tool_response else "(empty)"
+    status = "📦 Got results" if success else "❌ Error"
+    logger.info(f"{status} from {tool_name} (called by {agent_name})")
+    logger.debug(f"   📥 args: {args}")
+    logger.debug(f"   📤 response: {response_preview}")
+    tracker.log_tool_call(agent_name, tool_name, success, 0.0)
+    return None
+
+```
+
+
+---
+**File:** `framework/callbacks/narration_cb.py`
+```
+"""Shared default narration callback (observer, before_model)."""
+import logging
+
+logger = logging.getLogger("platform.callbacks")
+
+
+NARRATION_MAP = {
+    "gitlab_agent": "Only call a tool when the user explicitly asks for GitLab data. For greetings or general questions, just reply with text.",
+}
+
+
+def narration_cb(callback_context):
+    """Append narration style to system instruction based on agent name."""
+    agent_name = getattr(callback_context, "agent_name", "") or ""
+    narration = NARRATION_MAP.get(agent_name)
+    if narration:
+        logger.info(f"📝 Setting behavior for {agent_name}")
+    if not narration:
+        return None
+
+    # Append to system instruction if the llm_request is accessible
+    llm_request = getattr(callback_context, "llm_request", None)
+    if llm_request and hasattr(llm_request, "config") and llm_request.config:
+        existing = getattr(llm_request.config, "system_instruction", "") or ""
+        llm_request.config.system_instruction = (
+            f"{existing}\n\n{narration}".strip() if existing else narration
+        )
+
+    return None
+
+```
+
+
+---
+**File:** `framework/callbacks/after_agent_cb.py`
+```
+"""Shared default after-agent callback (controller)."""
+import logging
+from observability.tracker import tracker
+
+logger = logging.getLogger("platform.callbacks")
+
+
+def after_agent_cb(callback_context):
+    """
+    1. Semantic validation — log _validation_error if set.
+    2. Checkpoint — write {agent_name}_output and checkpoint_{agent_name} to state.
+    """
+    agent_name = getattr(callback_context, "agent_name", "") or "unknown"
+    logger.info(f"✅ {agent_name} finished — saving checkpoint")
+
+    # 1. Validation error
+    validation_error = callback_context.state.get("_validation_error")
+    if validation_error:
+        tracker.log_agent_event("validation_error", agent_name, {"error": validation_error})
+
+    # 2. Checkpoint
+    output = getattr(callback_context, "output", None)
+    if output is not None:
+        callback_context.state[f"{agent_name}_output"] = output
+    callback_context.state[f"checkpoint_{agent_name}"] = True
+
+    return None
+
+```
+
+
+---
+**File:** `framework/callbacks/step_logging_cb.py`
+```
+"""Step-by-step logging callbacks for debugging agent execution.
+
+Logs before/after every agent, model call, and tool call so you can see
+exactly what's happening at each step in the terminal.
+
+ADK calls callbacks with keyword args, so all functions use **kwargs style.
+"""
+import logging
+
+logger = logging.getLogger("platform.steps")
+logger.setLevel(logging.DEBUG)
+
+# Ensure output goes to console even if root logger isn't configured
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"
+    ))
+    logger.addHandler(_handler)
+    logger.propagate = False
+
+
+# ── Before Agent ──────────────────────────────────────────────────────────
+def step_before_agent_cb(callback_context=None, **kwargs):
+    agent_name = getattr(callback_context, "agent_name", "unknown") if callback_context else "unknown"
+    logger.info(f">>> AGENT START: {agent_name}")
+    return None
+
+
+# ── After Agent ───────────────────────────────────────────────────────────
+def step_after_agent_cb(callback_context=None, **kwargs):
+    agent_name = getattr(callback_context, "agent_name", "unknown") if callback_context else "unknown"
+    logger.info(f"<<< AGENT DONE: {agent_name}")
+    return None
+
+
+# ── Before Model Call ─────────────────────────────────────────────────────
+def step_before_model_cb(callback_context=None, llm_request=None, **kwargs):
+    agent_name = getattr(callback_context, "agent_name", "unknown") if callback_context else "unknown"
+    logger.info(f"  >> MODEL CALL: {agent_name}")
+
+    if llm_request:
+        # Log system instruction
+        config = getattr(llm_request, "config", None)
+        if config:
+            sys_instr = getattr(config, "system_instruction", None)
+            if sys_instr:
+                preview = str(sys_instr)[:200]
+                logger.debug(f"     system_instruction: {preview}...")
+
+        # Log the contents/messages being sent
+        contents = getattr(llm_request, "contents", None)
+        if contents:
+            logger.debug(f"     message count: {len(contents)}")
+            if len(contents) > 0:
+                last = contents[-1]
+                parts = getattr(last, "parts", []) or []
+                for part in parts[:2]:
+                    text = getattr(part, "text", None)
+                    if text:
+                        logger.debug(f"     last msg: {text[:200]}")
+                    fc = getattr(part, "function_call", None)
+                    if fc:
+                        args = dict(fc.args) if getattr(fc, "args", None) else {}
+                        logger.debug(f"     function_call: {fc.name}({args})")
+                    fr = getattr(part, "function_response", None)
+                    if fr:
+                        resp_preview = str(fr.response)[:200] if getattr(fr, "response", None) else ""
+                        logger.debug(f"     function_response: {fr.name} -> {resp_preview}")
+
+        # Log available tools
+        tools = getattr(llm_request, "tools", None)
+        if tools:
+            tool_names = []
+            for t in tools:
+                decls = getattr(t, "function_declarations", None) or []
+                tool_names.extend(d.name for d in decls)
+            if tool_names:
+                logger.debug(f"     available tools: {tool_names}")
+
+    return None
+
+
+# ── After Model Call ──────────────────────────────────────────────────────
+def step_after_model_cb(callback_context=None, llm_response=None, **kwargs):
+    agent_name = getattr(callback_context, "agent_name", "unknown") if callback_context else "unknown"
+    logger.info(f"  << MODEL RESPONSE: {agent_name}")
+
+    if llm_response:
+        content = getattr(llm_response, "content", None)
+        if content:
+            parts = getattr(content, "parts", []) or []
+            for part in parts[:3]:
+                text = getattr(part, "text", None)
+                if text:
+                    logger.info(f"     text: {text[:300]}")
+                fc = getattr(part, "function_call", None)
+                if fc:
+                    args = dict(fc.args) if getattr(fc, "args", None) else {}
+                    logger.info(f"     -> CALLING TOOL: {fc.name}({args})")
+    return None
+
+
+# ── After Tool ────────────────────────────────────────────────────────────
+def step_after_tool_cb(tool=None, args=None, tool_context=None, tool_response=None, **kwargs):
+    tool_name = getattr(tool, "name", str(tool)) if tool else "unknown"
+    logger.info(f"  <- TOOL RESULT: {tool_name}")
+    logger.debug(f"     args: {args}")
+    response_preview = str(tool_response)[:300] if tool_response else "(empty)"
+    logger.debug(f"     response: {response_preview}")
+    return None
+
+```
+
+
+---
+**File:** `framework/callbacks/composer.py`
+```
+"""Shared callback registry — used by framework/factory.py.
+
+SHARED_REGISTRY maps names (referenced in agent YAML files under callbacks:)
+to the actual callable. factory.py resolves names to callables and passes
+them as lists directly to LlmAgent — ADK iterates the list natively.
+
+Callback signatures (enforced by ADK):
+  before_agent_callback / after_agent_callback : (context) -> Optional[Content]
+  after_tool_callback                           : (tool, args, context, response) -> Optional[dict]
+"""
+from typing import Callable
+
+from framework.callbacks.before_agent_cb import before_agent_cb
+from framework.callbacks.after_agent_cb import after_agent_cb
+from framework.callbacks.narration_cb import narration_cb
+from framework.callbacks.logging_cb import logging_cb
+from framework.callbacks.approval_cb import approval_cb
+from framework.callbacks.tool_state_cb import tool_state_cb
+
+SHARED_REGISTRY: dict[str, Callable] = {
+    # before/after agent — signature: (context)
+    "before_agent_cb": before_agent_cb,
+    "after_agent_cb":  after_agent_cb,
+    "narration_cb":    narration_cb,
+    "approval_cb":     approval_cb,
+    # after_tool — signature: (tool, args, context, response)
+    "logging_cb":      logging_cb,
+    "tool_state_cb":   tool_state_cb,
+}
+
+```
+
+
+---
+**File:** `framework/callbacks/permission_callback.py`
+```
+from framework.callbacks.base_callback import BaseCallback, CallbackEvent
+from framework.exceptions import PermissionDeniedError
+from framework.permissions.evaluator import evaluate_permission, PermissionContext
+from framework.permissions.registry import policy_registry
+
+
+class PermissionCallback(BaseCallback):
+    """On before_agent, evaluates permission policy. Raises PermissionDeniedError if denied."""
+
+    async def before_agent(self, event: CallbackEvent) -> None:
+        policy = policy_registry.get_policy(event.agent_name)
+        tool_name = event.payload.get("tool_name", "")
+        context = PermissionContext(
+            agent_name=event.agent_name,
+            tool_name=tool_name,
+            user_id=event.payload.get("user_id", ""),
+            session=event.session,
+        )
+        result = evaluate_permission(context, policy)
+        if not result.allowed:
+            raise PermissionDeniedError(
+                agent_name=event.agent_name,
+                tool_name=tool_name,
+                reason=result.reason,
+            )
+
+```
+
+
+---
+**File:** `framework/callbacks/tool_state_cb.py`
+```
+"""after_tool_callback — persists selected tool outputs to session state.
+
+Tools stay pure (no ToolContext imports). This callback is the single place
+that decides what gets written to state and under which key.
+
+Add entries to _PERSIST to include new tools. Format: tool_name -> state_key.
+"""
+import logging
+
+logger = logging.getLogger("platform.callbacks")
+
+# tool_name -> session state key
+_PERSIST: dict[str, str] = {
+    # GitLab
+    "gitlab_list_commits":   "gitlab_commits",
+    "gitlab_list_mrs":       "gitlab_mrs",
+    "gitlab_list_pipelines": "gitlab_pipelines",
+    # YouTube
+    "get_watch_summary":     "watch_summary",
+    "get_binge_sessions":    "binge_sessions",
+    "get_top_channels":      "top_channels",
+    # Entitlement
+    "check_user_entitlements": "entitlement_result",
+}
+
+
+def tool_state_cb(tool, args, tool_context, tool_response) -> None:
+    """Write tool output to session state if the tool is in _PERSIST."""
+    tool_name = getattr(tool, "name", str(tool))
+    key = _PERSIST.get(tool_name)
+    if key:
+        logger.info(f"💾 Saving {tool_name} results to session state['{key}']")
+        tool_context.state[key] = tool_response
+    else:
+        logger.debug(f"   ⏭️  {tool_name} — no state persistence needed")
+    return None
+
+```
+
+
+---
+**File:** `framework/callbacks/__init__.py`
+```
+
+```
+
+
+---
+**File:** `framework/callbacks/before_agent_cb.py`
+```
+"""Shared default before-agent callback (controller)."""
+import logging
+import os
+
+logger = logging.getLogger("platform.callbacks")
+
+
+def before_agent_cb(callback_context):
+    """
+    1. Permission check — if ALLOWED_AGENTS != '*', block unlisted agents.
+    2. Session injection — write user_goals into callback_context.state if present.
+    """
+    agent_name = getattr(callback_context, "agent_name", "") or ""
+    logger.info(f"🤔 Waking up {agent_name}... checking permissions")
+
+    # 1. Permission check
+    allowed = os.getenv("ALLOWED_AGENTS", "*")
+    if allowed != "*":
+        permitted = [a.strip() for a in allowed.split(",")]
+        if agent_name not in permitted:
+            logger.warning(f"🚫 Blocked! {agent_name} is not in the allowed list")
+            try:
+                from google.genai import types as genai_types
+                return genai_types.Content(
+                    role="model",
+                    parts=[genai_types.Part(text=f"Agent '{agent_name}' is not permitted.")],
+                )
+            except ImportError:
+                pass  # ADK not installed yet — skip blocking during tests
+
+    # 2. Session injection — pull user_goals from ADK session state if set
+    goals = callback_context.state.get("user_goals")
+    if goals:
+        callback_context.state["user_goals"] = goals
+
+    return None
+
+```
+
+
+---
+**File:** `framework/callbacks/validation_callback.py`
+```
+from framework.callbacks.base_callback import BaseCallback, CallbackEvent
+from framework.exceptions import ValidationError as FrameworkValidationError
+from framework.validation.registry import validator_registry
+
+
+class ValidationCallback(BaseCallback):
+    """On after_agent, runs all registered validators. Raises ValidationError if score < 0.5."""
+
+    async def after_agent(self, event: CallbackEvent) -> None:
+        output = event.payload.get("output", {})
+        context = {
+            "agent_name": event.agent_name,
+            "run_id": event.run_id,
+            "session": event.session,
+        }
+
+        results = await validator_registry.run_all(output, context)
+
+        errors: list[str] = []
+        for result in results:
+            if result.score < 0.5:
+                errors.extend(result.errors)
+
+        if errors:
+            raise FrameworkValidationError(
+                agent_name=event.agent_name,
+                errors=errors,
+                reason="One or more validators returned score below threshold",
+            )
+
+```
+
+
+---
+**File:** `framework/callbacks/master.py`
+```
+"""Master callbacks — one per ADK hook type.
+
+The factory wires these 6 callbacks into every agent. Each one:
+  1. Logs the event (narrated style)
+  2. Calls any agent-specific hooks from YAML
+
+Agent YAML only needs to declare agent-specific callbacks under:
+  callbacks:
+    agent_before: [my_before_cb]
+    agent_after:  [my_after_cb]
+
+Logging/tracing/state persistence is automatic — no YAML config needed.
+"""
+import logging
+import os
+
+from observability.tracker import tracker
+
+logger = logging.getLogger("platform.agent")
+
+# tool_name -> session state key (auto-persist after tool calls)
+_PERSIST: dict[str, str] = {
+    "gitlab_list_commits":     "gitlab_commits",
+    "gitlab_list_mrs":         "gitlab_mrs",
+    "gitlab_list_pipelines":   "gitlab_pipelines",
+    "gitlab_list_projects":    "gitlab_projects",
+    "get_watch_summary":       "watch_summary",
+    "get_binge_sessions":      "binge_sessions",
+    "get_top_channels":        "top_channels",
+    "check_user_entitlements": "entitlement_result",
+}
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────
+
+def _run_agent_hooks(hooks, callback_context):
+    """Run agent-specific hooks (before_agent / after_agent signature)."""
+    for hook in hooks:
+        result = hook(callback_context)
+        if result is not None:
+            return result
+    return None
+
+
+def _run_tool_hooks(hooks, tool, args, tool_context, tool_response=None):
+    """Run agent-specific hooks (before_tool / after_tool signature)."""
+    for hook in hooks:
+        if tool_response is not None:
+            result = hook(tool, args, tool_context, tool_response)
+        else:
+            result = hook(tool, args, tool_context)
+        if result is not None:
+            return result
+    return None
+
+
+# ── Builder functions ─────────────────────────────────────────────────────
+# Each returns a callback with the correct ADK signature.
+# Agent-specific hooks are baked in via closure.
+
+
+def build_before_agent(agent_hooks: list = None):
+    """before_agent_callback: (callback_context) -> Optional[Content]"""
+    hooks = agent_hooks or []
+
+    def before_agent(callback_context):
+        agent_name = getattr(callback_context, "agent_name", "unknown")
+        logger.info(f"🤔 Waking up {agent_name}...")
+
+        # Permission check
+        allowed = os.getenv("ALLOWED_AGENTS", "*")
+        if allowed != "*":
+            permitted = [a.strip() for a in allowed.split(",")]
+            if agent_name not in permitted:
+                logger.warning(f"🚫 Blocked {agent_name} — not in ALLOWED_AGENTS")
+                try:
+                    from google.genai import types as genai_types
+                    return genai_types.Content(
+                        role="model",
+                        parts=[genai_types.Part(text=f"Agent '{agent_name}' is not permitted.")],
+                    )
+                except ImportError:
+                    pass
+
+        # Run agent-specific hooks
+        result = _run_agent_hooks(hooks, callback_context)
+        if result is not None:
+            return result
+
+        logger.info(f"✅ {agent_name} ready")
+        return None
+
+    return before_agent
+
+
+def build_after_agent(agent_hooks: list = None):
+    """after_agent_callback: (callback_context) -> Optional[Content]"""
+    hooks = agent_hooks or []
+
+    def after_agent(callback_context):
+        agent_name = getattr(callback_context, "agent_name", "unknown")
+        logger.info(f"🏁 {agent_name} finished")
+
+        # Checkpoint
+        callback_context.state[f"checkpoint_{agent_name}"] = True
+
+        # Validation error check
+        validation_error = callback_context.state.get("_validation_error")
+        if validation_error:
+            logger.warning(f"⚠️  Validation error in {agent_name}: {validation_error}")
+            tracker.log_agent_event("validation_error", agent_name, {"error": validation_error})
+
+        # Run agent-specific hooks
+        result = _run_agent_hooks(hooks, callback_context)
+        if result is not None:
+            return result
+
+        # Debug: log all state keys
+        try:
+            all_keys = list(callback_context.state._state.keys()) if hasattr(callback_context.state, '_state') else []
+            logger.info(f"📊 {agent_name} state keys: {all_keys}")
+        except Exception as e:
+            logger.debug(f"   Could not read state keys: {e}")
+        logger.info(f"✅ {agent_name} checkpoint saved")
+        return None
+
+    return after_agent
+
+
+def build_before_model(agent_hooks: list = None):
+    """before_model_callback: (callback_context, llm_request) -> Optional[LlmResponse]"""
+    hooks = agent_hooks or []
+
+    def before_model(callback_context, llm_request):
+        agent_name = getattr(callback_context, "agent_name", "unknown")
+        logger.info(f"🧠 {agent_name} thinking...")
+
+        # Log what's being sent
+        if llm_request:
+            contents = getattr(llm_request, "contents", None)
+            if contents:
+                logger.debug(f"   📨 Sending {len(contents)} messages to model")
+                # Log last user message
+                last = contents[-1] if contents else None
+                if last:
+                    parts = getattr(last, "parts", []) or []
+                    for part in parts[:2]:
+                        text = getattr(part, "text", None)
+                        if text:
+                            logger.debug(f"   💬 Last message: {text[:150]}")
+
+            # Log available tools
+            tools = getattr(llm_request, "tools", None)
+            if tools:
+                tool_names = []
+                for t in tools:
+                    decls = getattr(t, "function_declarations", None) or []
+                    tool_names.extend(d.name for d in decls)
+                if tool_names:
+                    logger.debug(f"   🔧 Tools available: {tool_names}")
+
+        # Run agent-specific hooks (e.g. narration injection)
+        for hook in hooks:
+            result = hook(callback_context, llm_request)
+            if result is not None:
+                return result
+
+        return None
+
+    return before_model
+
+
+def build_after_model(agent_hooks: list = None):
+    """after_model_callback: (callback_context, llm_response) -> Optional[LlmResponse]"""
+    hooks = agent_hooks or []
+
+    def after_model(callback_context, llm_response):
+        agent_name = getattr(callback_context, "agent_name", "unknown")
+
+        if llm_response:
+            content = getattr(llm_response, "content", None)
+            if content:
+                parts = getattr(content, "parts", []) or []
+                for part in parts[:3]:
+                    text = getattr(part, "text", None)
+                    if text:
+                        logger.info(f"💭 {agent_name} says: {text[:200]}")
+                    fc = getattr(part, "function_call", None)
+                    if fc:
+                        args = dict(fc.args) if getattr(fc, "args", None) else {}
+                        logger.info(f"🔍 {agent_name} calling tool: {fc.name}({args})")
+
+        # Run agent-specific hooks
+        for hook in hooks:
+            result = hook(callback_context, llm_response)
+            if result is not None:
+                return result
+
+        return None
+
+    return after_model
+
+
+def build_before_tool(agent_hooks: list = None):
+    """before_tool_callback: (tool, args, tool_context) -> Optional[dict]"""
+    hooks = agent_hooks or []
+
+    def before_tool(tool, args, tool_context):
+        tool_name = getattr(tool, "name", str(tool))
+        logger.info(f"⚡ Calling {tool_name}...")
+        logger.debug(f"   📥 args: {args}")
+
+        # Run agent-specific hooks
+        return _run_tool_hooks(hooks, tool, args, tool_context)
+
+    return before_tool
+
+
+def build_after_tool(agent_hooks: list = None):
+    """after_tool_callback: (tool, args, tool_context, tool_response) -> Optional[dict]"""
+    hooks = agent_hooks or []
+
+    def after_tool(tool, args, tool_context, tool_response):
+        tool_name = getattr(tool, "name", str(tool))
+        agent_name = getattr(tool_context, "agent_name", "unknown")
+        success = "error" not in (tool_response or {})
+
+        # Logging
+        if success:
+            logger.info(f"📦 Got results from {tool_name}")
+        else:
+            error = (tool_response or {}).get("error", "unknown error")
+            logger.warning(f"❌ {tool_name} failed: {error}")
+        logger.debug(f"   📤 response: {str(tool_response)[:200]}")
+
+        # Tracker
+        tracker.log_tool_call(agent_name, tool_name, success, 0.0)
+
+        # State persistence
+        state_key = _PERSIST.get(tool_name)
+        if state_key:
+            logger.info(f"💾 Saving to state['{state_key}']")
+            tool_context.state[state_key] = tool_response
+            logger.info(f"📋 Saved {len(str(tool_response))} chars to state['{state_key}']")
+
+        # Run agent-specific hooks
+        return _run_tool_hooks(hooks, tool, args, tool_context, tool_response)
+
+    return after_tool
+
+```
+
+
+---
+**File:** `framework/callbacks/approval_cb.py`
+```
+"""Shared default approval callback (controller, before_tool)."""
+import logging
+import os
+from observability.tracker import tracker
+
+logger = logging.getLogger("platform.callbacks")
+
+
+def approval_cb(callback_context):
+    """Gate write tools behind human approval unless AUTO_APPROVE=true."""
+    tool = getattr(callback_context, "tool", None)
+    requires_approval = getattr(tool, "requires_approval", False) if tool else False
+    tool_name = getattr(tool, "name", "unknown") if tool else "unknown"
+
+    if not requires_approval:
+        logger.debug(f"[approval_cb] {tool_name} — no approval needed")
+        return None
+
+    logger.info(f"[approval_cb] {tool_name} — requires approval")
+
+    auto_approve = os.getenv("AUTO_APPROVE", "false").lower()
+    if auto_approve == "true":
+        agent_name = getattr(callback_context, "agent_name", "unknown")
+        tool_name = getattr(tool, "name", "unknown") if tool else "unknown"
+        tracker.log_agent_event(
+            "auto_approved",
+            agent_name,
+            {"tool": tool_name, "warning": "AUTO_APPROVE bypassed confirmation"},
+        )
+        return None
+
+    # Return a content block asking for confirmation
+    tool_name = getattr(tool, "name", "this tool") if tool else "this tool"
+    tool_args = getattr(callback_context, "tool_call_args", {}) or {}
+
+    try:
+        from google.genai import types as genai_types
+        msg = (
+            f"This action requires approval.\n"
+            f"Tool: **{tool_name}**\n"
+            f"Arguments: {tool_args}\n\n"
+            f"Please confirm (yes/no)."
+        )
+        return genai_types.Content(
+            role="model",
+            parts=[genai_types.Part(text=msg)],
+        )
+    except ImportError:
+        return None
+
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/step_logging_cb.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xbd in position 9: invalid start byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/narration_callback.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xbe in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/base_callback.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xbe in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/tracing_callback.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xbe in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/composer.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xc2 in position 8: invalid continuation byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/risk_callback.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x88 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/logging_cb.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xc3 in position 8: invalid continuation byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/master.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode bytes in position 9-10: invalid continuation byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/approval_callback.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xbe in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/approval_cb.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x81 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/logging_callback.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xbe in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/after_agent_cb.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xb4 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/tool_state_cb.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xcc in position 8: invalid continuation byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/narration_cb.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xd3 in position 8: invalid continuation byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x88 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/entitlement_callback.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xbe in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/callbacks/__pycache__/before_agent_cb.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xad in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/__pycache__/workflow_registry.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xbe in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/__pycache__/factory.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x96 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x88 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `framework/state/state_store.py`
+```
+"""In-memory state store with namespace scoping.
+
+Namespace pattern:
+  session:{session_id}:{key}
+  user:{user_id}:{key}
+  app:{key}
+"""
+
+import logging
+
+logger = logging.getLogger("platform.state")
+
+
+class StateStore:
+    def __init__(self):
+        self._data: dict[str, object] = {}
+
+    def _build_key(self, scope: str, scope_id: str | None, key: str) -> str:
+        if scope == "app":
+            return f"app:{key}"
+        return f"{scope}:{scope_id}:{key}"
+
+    def get(self, key: str, scope: str = "session", scope_id: str | None = None, default=None):
+        full_key = self._build_key(scope, scope_id, key)
+        return self._data.get(full_key, default)
+
+    def set(self, key: str, value, scope: str = "session", scope_id: str | None = None):
+        full_key = self._build_key(scope, scope_id, key)
+        self._data[full_key] = value
+        logger.debug("state.set %s", full_key)
+
+    def delete(self, key: str, scope: str = "session", scope_id: str | None = None):
+        full_key = self._build_key(scope, scope_id, key)
+        self._data.pop(full_key, None)
+
+    def list_keys(self, scope: str = "session", scope_id: str | None = None) -> list[str]:
+        prefix = f"{scope}:{scope_id}:" if scope != "app" else "app:"
+        return [k for k in self._data if k.startswith(prefix)]
+
+    def clear(self):
+        self._data.clear()
+
+
+state_store = StateStore()
+
+```
+
+
+---
+**File:** `framework/state/__init__.py`
+```
+from framework.state.state_store import state_store
+
+__all__ = ["state_store"]
+
+```
+
+
+---
+**File:** `framework/permissions/__init__.py`
+```
+from framework.permissions.permission_engine import permission_engine
+
+__all__ = ["permission_engine"]
+
+```
+
+
+---
+**File:** `framework/permissions/permission_engine.py`
+```
+"""Permission engine — agent-level and tool-level permission checks.
+
+Evaluates whether an agent is allowed to run and whether it may use specific tools.
+"""
+
+import logging
+from dataclasses import dataclass, field
+
+logger = logging.getLogger("platform.permissions")
+
+
+@dataclass
+class PermissionResult:
+    allowed: bool
+    reason: str = ""
+    required_approval: bool = False
+
+
+# Default policy: agent -> list of allowed tool domains
+_DEFAULT_POLICY: dict[str, list[str]] = {
+    "commit_analyzer": ["github", "local_file"],
+    "report_agent": ["file"],
+}
+
+
+class PermissionEngine:
+    def __init__(self, policy: dict[str, list[str]] | None = None):
+        self._policy = policy or _DEFAULT_POLICY
+
+    def check_agent(self, agent_name: str, context: dict) -> PermissionResult:
+        """Check if the agent is allowed to execute in the given context."""
+        # All registered agents are allowed by default
+        return PermissionResult(allowed=True, reason="agent permitted")
+
+    def check_tool(self, agent_name: str, tool_domain: str, context: dict) -> PermissionResult:
+        """Check if the agent may use tools from the given domain."""
+        allowed_domains = self._policy.get(agent_name)
+        if allowed_domains is None:
+            # No explicit policy → allow (open by default, tighten per need)
+            return PermissionResult(allowed=True, reason="no policy restriction")
+        if tool_domain in allowed_domains:
+            return PermissionResult(allowed=True, reason=f"domain '{tool_domain}' allowed for '{agent_name}'")
+        return PermissionResult(
+            allowed=False,
+            reason=f"agent '{agent_name}' is not permitted to use domain '{tool_domain}'",
+        )
+
+    def check(self, agent_name: str, tool_domains: list[str], context: dict) -> PermissionResult:
+        """Combined check: agent permission + all tool domains."""
+        agent_result = self.check_agent(agent_name, context)
+        if not agent_result.allowed:
+            return agent_result
+        for domain in tool_domains:
+            tool_result = self.check_tool(agent_name, domain, context)
+            if not tool_result.allowed:
+                return tool_result
+        return PermissionResult(allowed=True, reason="all checks passed")
+
+
+permission_engine = PermissionEngine()
+
+```
+
+
+---
+**File:** `framework/validation/output_validator.py`
+```
+"""Output validation with retry support."""
+
+import logging
+from pydantic import BaseModel, ValidationError
+
+logger = logging.getLogger("platform.validation")
+
+
+class PartialResult:
+    def __init__(self, success: bool, data=None, errors: list[str] | None = None):
+        self.success = success
+        self.data = data
+        self.errors = errors or []
+
+
+def validate_output(data: dict, schema: type[BaseModel]) -> PartialResult:
+    """Validate output data against a Pydantic schema."""
+    try:
+        validated = schema(**data)
+        return PartialResult(success=True, data=validated.model_dump())
+    except ValidationError as e:
+        errors = [f"{err['loc']}: {err['msg']}" for err in e.errors()]
+        logger.warning("Output validation failed: %s", errors)
+        return PartialResult(success=False, errors=errors)
+
+```
+
+
+---
+**File:** `framework/validation/__init__.py`
+```
+from framework.validation.input_validator import validate_input, ValidationResult
+from framework.validation.output_validator import validate_output, PartialResult
+
+__all__ = ["validate_input", "validate_output", "ValidationResult", "PartialResult"]
+
+```
+
+
+---
+**File:** `framework/validation/input_validator.py`
+```
+"""Input validation using Pydantic schemas."""
+
+import logging
+from pydantic import BaseModel, ValidationError
+
+logger = logging.getLogger("platform.validation")
+
+
+class ValidationResult:
+    def __init__(self, valid: bool, errors: list[str] | None = None, data: dict | None = None):
+        self.valid = valid
+        self.errors = errors or []
+        self.data = data or {}
+
+
+def validate_input(data: dict, schema: type[BaseModel]) -> ValidationResult:
+    """Validate input data against a Pydantic schema."""
+    try:
+        validated = schema(**data)
+        return ValidationResult(valid=True, data=validated.model_dump())
+    except ValidationError as e:
+        errors = [f"{err['loc']}: {err['msg']}" for err in e.errors()]
+        logger.warning("Input validation failed: %s", errors)
+        return ValidationResult(valid=False, errors=errors)
+
+```
+
+
+---
+**File:** `framework/session/__init__.py`
+```
+from framework.session.session_service import session_service
+
+__all__ = ["session_service"]
+
+```
+
+
+---
+**File:** `framework/session/session_service.py`
+```
+"""Session service — workflow-level shared state built on top of the state store.
+
+Provides scoped get/set with session, user, and app scopes.
+Acts as the shared blackboard between agents in a workflow.
+"""
+
+import logging
+from framework.state.state_store import state_store
+
+logger = logging.getLogger("platform.session")
+
+
+class SessionService:
+    def __init__(self, store=None):
+        self._store = store or state_store
+
+    def get(self, key: str, scope: str = "session", scope_id: str | None = None, default=None):
+        return self._store.get(key, scope=scope, scope_id=scope_id, default=default)
+
+    def set(self, key: str, value, scope: str = "session", scope_id: str | None = None):
+        self._store.set(key, value, scope=scope, scope_id=scope_id)
+
+    def get_session_state(self, session_id: str) -> dict:
+        keys = self._store.list_keys(scope="session", scope_id=session_id)
+        prefix = f"session:{session_id}:"
+        return {k.removeprefix(prefix): self._store.get(k.removeprefix(prefix), scope="session", scope_id=session_id) for k in keys}
+
+
+session_service = SessionService()
+
+```
+
+
+---
+**File:** `agent_configs/__init__.py`
+```
+
+```
+
+
+---
+**File:** `agent_configs/gitlab_agent/gitlab_agent.yaml`
+```
+agent_id: gitlab_agent
+enabled: true
+model: ollama/gemma3:4b
+prompt: |
+  You are a GitLab assistant for project "{gitlab_default_project}".
+
+  STEP 1: Read the user's message carefully.
+  STEP 2: If it is a greeting or general question, reply with text. Do NOT call any tool.
+  STEP 3: Only call a tool when the user asks for specific GitLab data (commits, MRs, pipelines).
+  STEP 4: Before calling a tool, explain which tool you will call and why.
+  STEP 5: After getting results, summarize them clearly for the user.
+
+  For write operations (create_mr, trigger_pipeline): always confirm details with the user before executing.
+
+  You can help with:
+  - Listing commits on a branch
+  - Viewing merge requests
+  - Viewing pipelines
+  - Creating merge requests
+  - Triggering pipelines
+tools:
+  - gitlab_list_commits
+  - gitlab_get_commit
+  - gitlab_list_mrs
+  - gitlab_get_mr
+  - gitlab_create_mr
+  - gitlab_list_pipelines
+  - gitlab_get_pipeline
+  - gitlab_trigger_pipeline
+callbacks:
+  agent_before:
+    - gitlab_before_cb
+  agent_after:
+    - gitlab_after_cb
+
+```
+
+
+---
+**File:** `agent_configs/gitlab_agent/__init__.py`
+```
+
+```
+
+
+---
+**File:** `agent_configs/gitlab_agent/callbacks/gitlab_after_cb.py`
+```
+import logging
+
+logger = logging.getLogger("platform.callbacks")
+
+
+def gitlab_after_cb(callback_context) -> None:
+    """Agent-specific after-agent callback. Handles errors and persists last op."""
+    logger.info("🔍 Reviewing GitLab agent results...")
+
+    output = callback_context.state.get("gitlab_agent_output")
+    if output and hasattr(output, "success") and not output.success:
+        error = getattr(output, "error", "Unknown error")
+        logger.warning(f"⚠️  GitLab error detected: {error}")
+        callback_context.state["gitlab_last_error"] = error
+
+    if output and hasattr(output, "operation") and output.operation:
+        logger.info(f"📋 Last operation: {output.operation}")
+        callback_context.state["last_gitlab_operation"] = output.operation
+
+    return None
+
+```
+
+
+---
+**File:** `agent_configs/gitlab_agent/callbacks/__init__.py`
+```
+
+```
+
+
+---
+**File:** `agent_configs/gitlab_agent/callbacks/gitlab_before_cb.py`
+```
+import logging
+import os
+
+logger = logging.getLogger("platform.callbacks")
+
+
+def gitlab_before_cb(callback_context) -> None:
+    """Agent-specific before-agent callback. Injects GITLAB_DEFAULT_PROJECT."""
+    default_project = os.getenv("GITLAB_DEFAULT_PROJECT", "")
+    logger.info(f"🔧 Configuring GitLab agent — default project: {default_project or '(none)'}")
+    callback_context.state["gitlab_default_project"] = default_project
+    return None
+
+```
+
+
+---
+**File:** `agent_configs/gitlab_agent/callbacks/__pycache__/gitlab_after_cb.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xfe in position 8: invalid start byte]
+```
+
+
+---
+**File:** `agent_configs/gitlab_agent/callbacks/__pycache__/gitlab_before_cb.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xdc in position 8: invalid continuation byte]
+```
+
+
+---
+**File:** `agent_configs/gitlab_agent/callbacks/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte]
+```
+
+
+---
+**File:** `agent_configs/gitlab_agent/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte]
+```
+
+
+---
+**File:** `agent_configs/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte]
+```
+
+
+---
+**File:** `agent_configs/coordinator_agent/__init__.py`
+```
+
+```
+
+
+---
+**File:** `agent_configs/coordinator_agent/coordinator_agent.yaml`
+```
+agent_id: coordinator_agent
+enabled: true
+model: ollama/gemma3:4b
+prompt: |
+  You are a coordinator. Route user requests to the correct workflow.
+  Available workflows:
+  - gitlab_workflow: ALL GitLab requests — commits, MRs, pipelines, projects
+  Route only. Do not answer questions yourself.
+  If not routable, say so.
+tools: []
+
+```
+
+
+---
+**File:** `agent_configs/summary_agent/__init__.py`
+```
+
+```
+
+
+---
+**File:** `agent_configs/summary_agent/summary_agent.yaml`
+```
+agent_id: summary_agent
+enabled: true
+model: ollama/gemma3:4b
+prompt: |
+  You are a commit summary analyst.
+
+  Here is the commit data to analyze:
+  {commit_data_for_summary}
+
+  Produce a summary that includes:
+  - Total number of commits
+  - How often commits were made (daily, weekly, sporadic)
+  - Most active days or periods
+  - A brief pattern description (e.g. "commits are clustered on weekdays" or "irregular bursts")
+
+  If the data says "No commit data available", say that and nothing else.
+
+  Do NOT call any tools. Just analyze the data and respond with your summary.
+tools: []
+callbacks:
+  agent_before:
+    - summary_before_cb
+
+```
+
+
+---
+**File:** `agent_configs/summary_agent/callbacks/summary_before_cb.py`
+```
+import json
+import logging
+
+logger = logging.getLogger("platform.callbacks")
+
+
+def summary_before_cb(callback_context) -> None:
+    """Inject gitlab_commits from state into the session for the summary agent."""
+    commits = callback_context.state.get("gitlab_commits")
+    if commits:
+        # Serialize commits so the model can read them in context
+        try:
+            commit_text = json.dumps(commits, indent=2, default=str)
+        except (TypeError, ValueError):
+            commit_text = str(commits)
+        callback_context.state["commit_data_for_summary"] = commit_text
+        logger.info(f"📊 Injected {len(commits) if isinstance(commits, list) else '?'} commits for summary agent")
+    else:
+        callback_context.state["commit_data_for_summary"] = "No commit data available."
+        logger.warning("⚠️  No gitlab_commits in state for summary agent")
+    return None
+
+```
+
+
+---
+**File:** `agent_configs/summary_agent/callbacks/__init__.py`
+```
+
+```
+
+
+---
+**File:** `agent_configs/summary_agent/callbacks/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa0 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `agent_configs/summary_agent/callbacks/__pycache__/summary_before_cb.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xa4 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `agent_configs/summary_agent/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xb2 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `agent_configs/.adk/session.db`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x8d in position 98: invalid start byte]
+```
+
+
+---
+**File:** `agents/github_agent/agent.py`
+```
+
+```
+
+
+---
+**File:** `observability/__init__.py`
+```
+
+```
+
+
+---
+**File:** `observability/tracker.py`
+```
+import json
+import logging
+import time
+from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger("platform.observability")
+
+
+class _Tracker:
+    """Append-only JSON-lines tracer for tool calls and agent events."""
+
+    TRACES_DIR = Path("reports/traces")
+
+    def __init__(self):
+        self.TRACES_DIR.mkdir(parents=True, exist_ok=True)
+        self._tool_calls_path = self.TRACES_DIR / "tool_calls.jsonl"
+        self._agent_events_path = self.TRACES_DIR / "agent_events.jsonl"
+
+    def log_tool_call(self, agent: str, tool: str, success: bool, duration_ms: float) -> None:
+        self._append(self._tool_calls_path, {
+            "ts": time.time(), "agent": agent, "tool": tool,
+            "success": success, "duration_ms": duration_ms,
+        })
+
+    def log_agent_event(self, event_type: str, agent: str, payload: dict[str, Any] | None = None) -> None:
+        self._append(self._agent_events_path, {
+            "ts": time.time(), "event_type": event_type,
+            "agent": agent, "payload": payload or {},
+        })
+
+    @staticmethod
+    def _append(path: Path, record: dict) -> None:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record) + "\n")
+
+
+# Module-level singleton used by functional callbacks
+tracker = _Tracker()
+
+```
+
+
+---
+**File:** `observability/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x88 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `observability/__pycache__/tracker.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xe3 in position 16: invalid continuation byte]
+```
+
+
+---
+**File:** `coordinator_agent/__init__.py`
+```
+# ADK web agent package — discovered automatically by `adk web .`
+
+```
+
+
+---
+**File:** `coordinator_agent/agent.py`
+```
+"""
+ADK web entry point — discovered by `adk web .`
+
+All agents and workflows are defined in agent_configs/ and workflow_configs/.
+Factory.bootstrap() discovers them automatically and wires sub-agents into
+the coordinator.
+"""
+import sys
+from pathlib import Path
+
+# Ensure project root is on sys.path when loaded by `adk web`
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from dotenv import load_dotenv
+load_dotenv()
+
+from framework.factory import Factory
+
+root_agent = Factory().bootstrap()
+
+```
+
+
+---
+**File:** `coordinator_agent/__pycache__/agent.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xb1 in position 9: invalid start byte]
+```
+
+
+---
+**File:** `coordinator_agent/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xaf in position 9: invalid start byte]
+```
+
+
+---
+**File:** `coordinator_agent/.adk/session.db`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xd4 in position 27: invalid continuation byte]
+```
+
+
+---
+**File:** `mcp_servers/__init__.py`
+```
+"""MCP server modules — each subdirectory is a standalone MCP server."""
+
+```
+
+
+---
+**File:** `mcp_servers/gitlab_server.py`
+```
+"""GitLab MCP server — exposes GitLab tools via the MCP protocol.
+
+Run standalone:
+    python mcp_servers/gitlab_server.py
+    python mcp_servers/gitlab_server.py --sse
+    python mcp_servers/gitlab_server.py --http
+"""
+
+import argparse
+import json
+import logging
+import sys
+import time
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Generator
+
+from mcp.server.fastmcp import FastMCP
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from platform_config.domains.gitlab.tools.gitlab_local import GitLabTool
+
+_handler = logging.StreamHandler(sys.stderr)
+_handler.setFormatter(logging.Formatter("%(message)s"))
+
+logger = logging.getLogger("gitlab_mcp")
+logger.setLevel(logging.DEBUG)
+logger.addHandler(_handler)
+logger.propagate = False
+
+_tool = GitLabTool()
+
+
+def _emit(level: str, tool: str, **fields: Any) -> None:
+    record = {"level": level, "tool": tool, **fields}
+    msg = json.dumps(record, default=str)
+    getattr(logger, level.lower(), logger.info)(msg)
+
+
+@contextmanager
+def tool_span(tool_name: str, inputs: dict) -> Generator[None, None, None]:
+    _emit("info", tool_name, event="call_start", inputs=inputs)
+    t0 = time.perf_counter()
+    try:
+        yield
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        _emit("info", tool_name, event="call_end", latency_ms=latency_ms)
+    except Exception as exc:
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        _emit("error", tool_name, event="call_error", error=str(exc), latency_ms=latency_ms)
+        raise
+
+
+mcp = FastMCP(
+    "gitlab",
+    instructions=(
+        "Provides tools to interact with GitLab: list commits, "
+        "manage merge requests, view pipelines, and trigger builds. "
+        "All operations require a valid GITLAB_TOKEN."
+    ),
+)
+
+
+import asyncio
+
+
+def _run_sync(coro):
+    """Run an async coroutine synchronously."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
+@mcp.tool()
+def get_commit(project: str = "", sha: str = "HEAD") -> dict:
+    """Get details of a specific commit.
+
+    Args:
+        project: GitLab project path (e.g. 'group/project'). Uses default if empty.
+        sha:     Commit SHA or ref. Defaults to 'HEAD'.
+    """
+    with tool_span("get_commit", {"project": project, "sha": sha}):
+        result = _run_sync(_tool.execute(operation="get_commit", project=project or None, sha=sha))
+        if not result.success:
+            raise RuntimeError(result.error)
+        return result.data
+
+
+@mcp.tool()
+def list_commits(project: str = "", ref_name: str = "main", per_page: int = 20) -> list[dict]:
+    """List recent commits for a project.
+
+    Args:
+        project:  GitLab project path. Uses default if empty.
+        ref_name: Branch or tag name. Defaults to 'main'.
+        per_page: Number of commits to return (max 100). Defaults to 20.
+    """
+    with tool_span("list_commits", {"project": project, "ref_name": ref_name}):
+        result = _run_sync(_tool.execute(
+            operation="list_commits", project=project or None,
+            ref_name=ref_name, per_page=per_page,
+        ))
+        if not result.success:
+            raise RuntimeError(result.error)
+        return result.data
+
+
+@mcp.tool()
+def get_mr(project: str = "", mr_iid: int = 0) -> dict:
+    """Get details of a specific merge request.
+
+    Args:
+        project: GitLab project path. Uses default if empty.
+        mr_iid:  Merge request IID.
+    """
+    with tool_span("get_mr", {"project": project, "mr_iid": mr_iid}):
+        result = _run_sync(_tool.execute(operation="get_mr", project=project or None, mr_iid=mr_iid))
+        if not result.success:
+            raise RuntimeError(result.error)
+        return result.data
+
+
+@mcp.tool()
+def list_mrs(project: str = "", state: str = "opened", per_page: int = 20) -> list[dict]:
+    """List merge requests for a project.
+
+    Args:
+        project:  GitLab project path. Uses default if empty.
+        state:    MR state filter — opened | closed | merged | all. Defaults to 'opened'.
+        per_page: Number of MRs to return (max 100). Defaults to 20.
+    """
+    with tool_span("list_mrs", {"project": project, "state": state}):
+        result = _run_sync(_tool.execute(
+            operation="list_mrs", project=project or None,
+            state=state, per_page=per_page,
+        ))
+        if not result.success:
+            raise RuntimeError(result.error)
+        return result.data
+
+
+@mcp.tool()
+def create_mr(
+    project: str = "",
+    source_branch: str = "",
+    target_branch: str = "",
+    title: str = "",
+    description: str = "",
+) -> dict:
+    """Create a new merge request.
+
+    Args:
+        project:       GitLab project path. Uses default if empty.
+        source_branch: Branch containing changes.
+        target_branch: Branch to merge into.
+        title:         MR title (required).
+        description:   MR description. Optional.
+    """
+    with tool_span("create_mr", {"project": project, "title": title}):
+        result = _run_sync(_tool.execute(
+            operation="create_mr", project=project or None,
+            source_branch=source_branch, target_branch=target_branch,
+            title=title, description=description,
+        ))
+        if not result.success:
+            raise RuntimeError(result.error)
+        return result.data
+
+
+@mcp.tool()
+def get_pipeline(project: str = "", pipeline_id: int = 0) -> dict:
+    """Get details of a specific pipeline.
+
+    Args:
+        project:     GitLab project path. Uses default if empty.
+        pipeline_id: Pipeline ID.
+    """
+    with tool_span("get_pipeline", {"project": project, "pipeline_id": pipeline_id}):
+        result = _run_sync(_tool.execute(
+            operation="get_pipeline", project=project or None,
+            pipeline_id=pipeline_id,
+        ))
+        if not result.success:
+            raise RuntimeError(result.error)
+        return result.data
+
+
+@mcp.tool()
+def list_pipelines(project: str = "", ref: str = "main", per_page: int = 20) -> list[dict]:
+    """List pipelines for a project.
+
+    Args:
+        project:  GitLab project path. Uses default if empty.
+        ref:      Branch ref to filter pipelines. Defaults to 'main'.
+        per_page: Number of pipelines to return (max 100). Defaults to 20.
+    """
+    with tool_span("list_pipelines", {"project": project, "ref": ref}):
+        result = _run_sync(_tool.execute(
+            operation="list_pipelines", project=project or None,
+            ref=ref, per_page=per_page,
+        ))
+        if not result.success:
+            raise RuntimeError(result.error)
+        return result.data
+
+
+@mcp.tool()
+def trigger_pipeline(project: str = "", ref: str = "main") -> dict:
+    """Trigger a new pipeline run.
+
+    Args:
+        project: GitLab project path. Uses default if empty.
+        ref:     Branch ref to run the pipeline on. Defaults to 'main'.
+    """
+    with tool_span("trigger_pipeline", {"project": project, "ref": ref}):
+        result = _run_sync(_tool.execute(
+            operation="trigger_pipeline", project=project or None, ref=ref,
+        ))
+        if not result.success:
+            raise RuntimeError(result.error)
+        return result.data
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="GitLab MCP server")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--sse", action="store_true", help="Run SSE transport on :8010")
+    group.add_argument("--http", action="store_true", help="Run streamable-HTTP transport on :8010")
+    args = parser.parse_args()
+
+    if args.sse:
+        print("[gitlab-mcp] Starting SSE server on http://127.0.0.1:8010/sse", file=sys.stderr)
+        mcp.settings.port = 8010
+        mcp.run(transport="sse")
+    elif args.http:
+        print("[gitlab-mcp] Starting HTTP server on http://127.0.0.1:8010/mcp", file=sys.stderr)
+        mcp.settings.port = 8010
+        mcp.run(transport="streamable-http")
+    else:
+        mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
+
+---
+**File:** `mcp_servers/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x93 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `mcp_servers/github/server.py`
+```
+"""GitHub MCP server — exposes GitHub tools via the MCP protocol.
+
+Run standalone:
+    python run_mcp_github.py
+
+Or consume from an ADK agent via McpToolset + StdioServerParameters.
+"""
+
+from mcp.server.fastmcp import FastMCP
+
+from mcp_servers.github import github_client as gh
+from mcp_servers.github.logger import tool_span
+
+mcp = FastMCP(
+    "github",
+    instructions=(
+        "Provides tools to interact with GitHub: list repositories, "
+        "read files, search code, and create issues. "
+        "All operations require a valid GITHUB_TOKEN."
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
+# Tool: list_repositories
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def list_repositories(username: str, repo_type: str = "public") -> list[dict]:
+    """List GitHub repositories for a user.
+
+    Args:
+        username:  GitHub username or organisation name.
+        repo_type: Visibility filter — public | private | all | forks | sources | member.
+                   Defaults to 'public'.
+
+    Returns:
+        List of repository summaries (name, description, language, stars, url).
+    """
+    with tool_span("list_repositories", {"username": username, "repo_type": repo_type}):
+        return gh.list_repositories(username, repo_type)
+
+
+# ---------------------------------------------------------------------------
+# Tool: read_file
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def read_file(owner: str, repo: str, path: str, ref: str = "HEAD") -> str:
+    """Read the text content of a file in a GitHub repository.
+
+    Args:
+        owner: Repository owner (user or org).
+        repo:  Repository name.
+        path:  File path inside the repo (e.g. 'src/main.py').
+        ref:   Branch, tag, or commit SHA. Defaults to 'HEAD'.
+
+    Returns:
+        Full UTF-8 text content of the file.
+    """
+    with tool_span("read_file", {"owner": owner, "repo": repo, "path": path, "ref": ref}):
+        return gh.read_file(owner, repo, path, ref)
+
+
+# ---------------------------------------------------------------------------
+# Tool: search_code
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def search_code(query: str, owner: str = "", repo: str = "") -> list[dict]:
+    """Search code across GitHub.
+
+    Args:
+        query: Search terms (GitHub code search syntax supported).
+        owner: Optional — scope results to this user/org.
+        repo:  Optional — scope results to this repository (requires owner).
+
+    Returns:
+        Up to 10 matching files with repository name, file path, and URL.
+    """
+    with tool_span("search_code", {"query": query, "owner": owner, "repo": repo}):
+        return gh.search_code(query, owner, repo)
+
+
+# ---------------------------------------------------------------------------
+# Tool: create_issue
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def create_issue(owner: str, repo: str, title: str, body: str = "") -> dict:
+    """Create a new GitHub issue.
+
+    Args:
+        owner: Repository owner.
+        repo:  Repository name.
+        title: Issue title (required).
+        body:  Issue body / description in markdown. Optional.
+
+    Returns:
+        Created issue with number, title, URL, and state.
+    """
+    with tool_span("create_issue", {"owner": owner, "repo": repo, "title": title}):
+        return gh.create_issue(owner, repo, title, body)
+
+```
+
+
+---
+**File:** `mcp_servers/github/__init__.py`
+```
+"""GitHub MCP server package."""
+
+```
+
+
+---
+**File:** `mcp_servers/github/logger.py`
+```
+"""Structured JSON logger for MCP tool calls."""
+
+import json
+import logging
+import sys
+import time
+from contextlib import contextmanager
+from typing import Any, Generator
+
+_handler = logging.StreamHandler(sys.stderr)
+_handler.setFormatter(logging.Formatter("%(message)s"))
+
+logger = logging.getLogger("github_mcp")
+logger.setLevel(logging.DEBUG)
+logger.addHandler(_handler)
+logger.propagate = False
+
+
+def _emit(level: str, tool: str, **fields: Any) -> None:
+    record = {"level": level, "tool": tool, **fields}
+    msg = json.dumps(record, default=str)
+    getattr(logger, level.lower(), logger.info)(msg)
+
+
+@contextmanager
+def tool_span(tool_name: str, inputs: dict) -> Generator[None, None, None]:
+    """Context manager that logs start, end, latency and any errors."""
+    _emit("info", tool_name, event="call_start", inputs=inputs)
+    t0 = time.perf_counter()
+    try:
+        yield
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        _emit("info", tool_name, event="call_end", latency_ms=latency_ms)
+    except Exception as exc:
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        _emit("error", tool_name, event="call_error", error=str(exc), latency_ms=latency_ms)
+        raise
+
+```
+
+
+---
+**File:** `mcp_servers/github/github_client.py`
+```
+"""Thin GitHub REST API v3 client — used exclusively by the MCP server tools."""
+
+import base64
+import os
+from typing import Any
+
+import httpx
+
+_BASE = "https://api.github.com"
+_ACCEPT = "application/vnd.github+json"
+
+
+class GitHubError(Exception):
+    """Raised for all GitHub API errors with a human-readable message."""
+
+
+def _headers() -> dict[str, str]:
+    token = os.getenv("GITHUB_TOKEN", "")
+    if not token:
+        raise GitHubError("GITHUB_TOKEN is not set. Add it to your .env file.")
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": _ACCEPT,
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def _get(path: str, params: dict | None = None) -> Any:
+    url = f"{_BASE}{path}"
+    with httpx.Client(timeout=15) as client:
+        resp = client.get(url, headers=_headers(), params=params or {})
+    _raise_for_status(resp)
+    return resp.json()
+
+
+def _post(path: str, payload: dict) -> Any:
+    url = f"{_BASE}{path}"
+    with httpx.Client(timeout=15) as client:
+        resp = client.post(url, headers=_headers(), json=payload)
+    _raise_for_status(resp)
+    return resp.json()
+
+
+def _raise_for_status(resp: httpx.Response) -> None:
+    if resp.status_code == 401:
+        raise GitHubError("Authentication failed — check your GITHUB_TOKEN.")
+    if resp.status_code == 403:
+        remaining = resp.headers.get("x-ratelimit-remaining", "?")
+        if remaining == "0":
+            reset = resp.headers.get("x-ratelimit-reset", "?")
+            raise GitHubError(f"GitHub rate limit exceeded. Resets at epoch {reset}.")
+        raise GitHubError(f"Forbidden (403): {resp.text[:200]}")
+    if resp.status_code == 404:
+        raise GitHubError(f"Resource not found (404): {resp.url}")
+    if resp.status_code >= 400:
+        raise GitHubError(f"GitHub API error {resp.status_code}: {resp.text[:200]}")
+
+
+# ---------------------------------------------------------------------------
+# Domain functions
+# ---------------------------------------------------------------------------
+
+def list_repositories(username: str, repo_type: str = "public") -> list[dict]:
+    """Return repos for *username*. repo_type: public | private | all | forks | sources | member."""
+    data = _get(f"/users/{username}/repos", params={"type": repo_type, "per_page": 30})
+    return [
+        {
+            "name": r["name"],
+            "full_name": r["full_name"],
+            "description": r.get("description") or "",
+            "language": r.get("language") or "",
+            "stars": r["stargazers_count"],
+            "forks": r["forks_count"],
+            "private": r["private"],
+            "url": r["html_url"],
+        }
+        for r in data
+    ]
+
+
+def read_file(owner: str, repo: str, path: str, ref: str = "HEAD") -> str:
+    """Return decoded text content of a file in *owner/repo* at *path*."""
+    data = _get(f"/repos/{owner}/{repo}/contents/{path.lstrip('/')}", params={"ref": ref})
+    if isinstance(data, list):
+        raise GitHubError(f"'{path}' is a directory, not a file.")
+    if data.get("encoding") != "base64":
+        raise GitHubError(f"Unexpected encoding: {data.get('encoding')}")
+    return base64.b64decode(data["content"]).decode("utf-8", errors="replace")
+
+
+def search_code(query: str, owner: str = "", repo: str = "") -> list[dict]:
+    """Search code across GitHub. Optionally scope to owner or owner/repo."""
+    scoped = query
+    if owner and repo:
+        scoped = f"{query} repo:{owner}/{repo}"
+    elif owner:
+        scoped = f"{query} user:{owner}"
+    data = _get("/search/code", params={"q": scoped, "per_page": 10})
+    return [
+        {
+            "repository": item["repository"]["full_name"],
+            "path": item["path"],
+            "url": item["html_url"],
+            "score": item.get("score", 0),
+        }
+        for item in data.get("items", [])
+    ]
+
+
+def create_issue(owner: str, repo: str, title: str, body: str = "") -> dict:
+    """Open a new issue in *owner/repo* and return key fields."""
+    data = _post(f"/repos/{owner}/{repo}/issues", {"title": title, "body": body})
+    return {
+        "number": data["number"],
+        "title": data["title"],
+        "url": data["html_url"],
+        "state": data["state"],
+    }
+
+```
+
+
+---
+**File:** `mcp_servers/github/__pycache__/server.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xb7 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `mcp_servers/github/__pycache__/logger.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x9d in position 8: invalid start byte]
+```
+
+
+---
+**File:** `mcp_servers/github/__pycache__/github_client.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xbe in position 8: invalid start byte]
+```
+
+
+---
+**File:** `mcp_servers/github/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x94 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `services/api_service.py`
+```
+import httpx
+from typing import Any, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class APIService:
+    """Shared HTTP client with auth, retry, and error handling.
+    All MCP tool wrappers use this — never create their own httpx clients."""
+
+    def __init__(self, base_url: str, api_key: Optional[str] = None):
+        self.base_url = base_url.rstrip("/")
+        self.headers = {"Content-Type": "application/json"}
+        if api_key:
+            self.headers["Authorization"] = f"Bearer {api_key}"
+        self._client: Optional[httpx.AsyncClient] = None
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                base_url=self.base_url,
+                headers=self.headers,
+                timeout=30.0
+            )
+        return self._client
+
+    async def get(self, path: str, params: dict = {}) -> Any:
+        client = await self._get_client()
+        for attempt in range(3):
+            try:
+                resp = await client.get(path, params=params)
+                resp.raise_for_status()
+                return resp.json()
+            except Exception as e:
+                if attempt == 2:
+                    raise
+                logger.warning(f"GET {path} attempt {attempt+1} failed: {e}")
+
+    async def post(self, path: str, data: dict) -> Any:
+        client = await self._get_client()
+        for attempt in range(3):
+            try:
+                resp = await client.post(path, json=data)
+                resp.raise_for_status()
+                return resp.json()
+            except Exception as e:
+                if attempt == 2:
+                    raise
+                logger.warning(f"POST {path} attempt {attempt+1} failed: {e}")
+
+    async def close(self):
+        if self._client:
+            await self._client.aclose()
+
+```
+
+
+---
+**File:** `services/__init__.py`
+```
+
+```
+
+
+---
+**File:** `services/llm_service.py`
+```
+"""
+LLM Service — runtime model resolution.
+
+Decouples agent code from a hard-coded model string.  Agents call
+llm_service.get_model("my_agent") instead of embedding "gemini-2.0-flash"
+directly, so the operator can swap models via .env with zero code changes.
+
+Resolution order (first match wins):
+  1. Per-agent override  MODEL_<AGENT_NAME_UPPER>=...
+  2. Global override     MODEL=...
+  3. Built-in default    gemini-2.0-flash
+
+Ollama support:
+  Set MODEL=ollama/<model-name> and OLLAMA_BASE_URL=http://localhost:11434
+  llm_service will automatically return a LiteLlm instance instead of a string.
+
+Example .env:
+  # Gemini (default)
+  MODEL=gemini-2.0-flash
+
+  # Ollama
+  MODEL=ollama/llama3.2
+  OLLAMA_BASE_URL=http://localhost:11434
+
+  # Per-agent override
+  MODEL_GITLAB_AGENT=ollama/mistral
+"""
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+_DEFAULT_MODEL = "gemini-2.0-flash"
+
+
+class LLMService:
+    """Resolves which model an agent should use at runtime.
+
+    Returns a string for Gemini models, or a LiteLlm instance for
+    ollama/* models (and any other LiteLLM-supported prefixes).
+
+    Per-agent env var format: MODEL_<AGENT_NAME_UPPERCASED_WITH_UNDERSCORES>
+    e.g. gitlab_agent → MODEL_GITLAB_AGENT
+    """
+
+    def get_model(self, agent_name: str = None):
+        """Return the model for the given agent.
+
+        Returns a plain string for Gemini, or a LiteLlm instance for
+        ollama/* (or other non-Google) models.
+        """
+        model_str = self._resolve_model_str(agent_name)
+
+        if "/" in model_str and not model_str.startswith("gemini"):
+            return self._make_lite_llm(model_str)
+
+        return model_str
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _resolve_model_str(self, agent_name: str = None) -> str:
+        if agent_name:
+            env_key = f"MODEL_{agent_name.upper()}"
+            per_agent = os.getenv(env_key)
+            if per_agent:
+                return per_agent
+        return os.getenv("MODEL", _DEFAULT_MODEL)
+
+    def _make_lite_llm(self, model_str: str):
+        try:
+            from google.adk.models.lite_llm import LiteLlm
+        except ImportError:
+            raise ImportError(
+                "LiteLLM support requires: pip install google-adk[extensions]"
+            )
+
+        kwargs = {"model": model_str}
+
+        # Allow overriding the base URL (required for local Ollama)
+        base_url = os.getenv("OLLAMA_BASE_URL")
+        if base_url and model_str.startswith("ollama/"):
+            kwargs["api_base"] = base_url
+
+        return LiteLlm(**kwargs)
+
+
+llm_service = LLMService()
+
+```
+
+
+---
+**File:** `services/__pycache__/__init__.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0x88 in position 8: invalid start byte]
+```
+
+
+---
+**File:** `services/__pycache__/llm_service.cpython-314.pyc`
+```
+[Could not read file: 'utf-8' codec can't decode byte 0xb7 in position 9: invalid start byte]
+```
