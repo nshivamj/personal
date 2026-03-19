@@ -1,480 +1,470 @@
+# Copy of before_agent_cb.py
+cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/before_agent_cb_copy.py << 'EOF'
+"""Shared default before-agent callback (controller)."""
+import logging
+import os
 
-CLAUDE CODE PROMPT — Day 1 Agentic Platform
-You are the orchestrator. Spawn 4 sub-agents in parallel. Do not write code yourself until all sub-agents complete, then do the integration steps.
-
-Context
-Building a generic agentic platform on Google ADK (adk web). Day 1 domain: GitLab. Two agents: coordinator_agent routes to gitlab_workflow, which runs gitlab_agent. Tools are independent and self-registering — agents declare tool names in YAML, resolver looks them up from a global registry.
-Shared contracts (all sub-agents must honor exactly)
-
-ToolResult:       success:bool, data:Any, error:str|None, metadata:dict
-CallbackSig:      (callback_context) -> LlmResponse | None
-tool name format: {domain}_{operation}  e.g. gitlab_list_commits
-session key fmt:  "{scope}:{key}"       e.g. "app:gitlab_default_project"
+logger = logging.getLogger("platform.callbacks")
 
 
-SUB-AGENT 1 — tool-and-registry
-Build the tool foundation.
-tools/base_tool.py
-	∙	ToolResult dataclass: success, data, error, metadata
-	∙	BaseTool ABC: name:str, description:str, requires_approval:bool=False, abstract execute(**kwargs)->ToolResult, concrete to_adk_function()->callable that wraps execute() as a plain Python function ADK can register as a tool
-tools/registry.py
-	∙	Module-level _registry: dict[str, BaseTool] = {}
-	∙	register(tool: BaseTool) — raises ValueError if name already registered
-	∙	get(name: str) -> BaseTool — raises KeyError with message "Tool '{name}' not found. Available: {list_all()}"
-	∙	list_all() -> list[str]
-	∙	get_many(names: list[str]) -> list[BaseTool]
-tools/gitlab/gitlab_local.py
-One class per operation extending BaseTool. Uses python-gitlab SDK. Reads GITLAB_URL, GITLAB_TOKEN, GITLAB_DEFAULT_PROJECT from env. Returns ToolResult always — never raises. Converts raw SDK responses via domains/gitlab/transformers.py.
+def before_agent_cb(callback_context):
+    """
+    1. Permission check — if ALLOWED_AGENTS != '*', block unlisted agents.
+    2. Session injection — write user_goals into callback_context.state if present.
+    """
+    agent_name = getattr(callback_context, "agent_name", "") or ""
+    logger.info(f"🤔 Waking up {agent_name}... checking permissions")
+
+    # 1. Permission check
+    allowed = os.getenv("ALLOWED_AGENTS", "*")
+    if allowed != "*":
+        permitted = [a.strip() for a in allowed.split(",")]
+        if agent_name not in permitted:
+            logger.warning(f"🚫 Blocked! {agent_name} is not in the allowed list")
+            try:
+                from google.genai import types as genai_types
+                return genai_types.Content(
+                    role="model",
+                    parts=[genai_types.Part(text=f"Agent '{agent_name}' is not permitted.")],
+                )
+            except ImportError:
+                pass  # ADK not installed yet — skip blocking during tests
+
+    # 2. Session injection — pull user_goals from ADK session state if set
+    goals = callback_context.state.get("user_goals")
+    if goals:
+        callback_context.state["user_goals"] = goals
+
+    return None
+EOF
+
+# Copy of after_agent_cb.py
+cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/after_agent_cb_copy.py << 'EOF'
+"""Shared default after-agent callback (controller)."""
+import logging
+from observability.tracker import tracker
+
+logger = logging.getLogger("platform.callbacks")
 
 
+def after_agent_cb(callback_context):
+    """
+    1. Semantic validation — log _validation_error if set.
+    2. Checkpoint — write {agent_name}_output and checkpoint_{agent_name} to state.
+    """
+    agent_name = getattr(callback_context, "agent_name", "") or "unknown"
+    logger.info(f"✅ {agent_name} finished — saving checkpoint")
 
-|Class                |name                     |requires_approval|
-|---------------------|-------------------------|-----------------|
-|`ListCommitsTool`    |`gitlab_list_commits`    |False            |
-|`GetCommitTool`      |`gitlab_get_commit`      |False            |
-|`ListMRsTool`        |`gitlab_list_mrs`        |False            |
-|`GetMRTool`          |`gitlab_get_mr`          |False            |
-|`CreateMRTool`       |`gitlab_create_mr`       |True             |
-|`ListPipelinesTool`  |`gitlab_list_pipelines`  |False            |
-|`GetPipelineTool`    |`gitlab_get_pipeline`    |False            |
-|`TriggerPipelineTool`|`gitlab_trigger_pipeline`|True             |
+    # 1. Validation error
+    validation_error = callback_context.state.get("_validation_error")
+    if validation_error:
+        tracker.log_agent_event("validation_error", agent_name, {"error": validation_error})
 
-Bottom of file — self-register all on import:
+    # 2. Checkpoint
+    output = getattr(callback_context, "output", None)
+    if output is not None:
+        callback_context.state[f"{agent_name}_output"] = output
+    callback_context.state[f"checkpoint_{agent_name}"] = True
 
-for _cls in [ListCommitsTool, GetCommitTool, ListMRsTool, GetMRTool,
-             CreateMRTool, ListPipelinesTool, GetPipelineTool, TriggerPipelineTool]:
-    registry.register(_cls())
+    return None
+EOF
+
+# Copy of approval_cb.py
+cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/approval_cb_copy.py << 'EOF'
+"""Shared default approval callback (controller, before_tool)."""
+import logging
+import os
+from observability.tracker import tracker
+
+logger = logging.getLogger("platform.callbacks")
 
 
-Verify: python -c "import tools.gitlab.gitlab_local; from tools.registry import list_all; print(list_all())" prints all 8 names.
+def approval_cb(callback_context):
+    """Gate write tools behind human approval unless AUTO_APPROVE=true."""
+    tool = getattr(callback_context, "tool", None)
+    requires_approval = getattr(tool, "requires_approval", False) if tool else False
+    tool_name = getattr(tool, "name", "unknown") if tool else "unknown"
 
-SUB-AGENT 2 — domain-schemas-and-prompts
-Build schemas, transformers, and prompts. No ADK imports. No tool imports.
-domains/gitlab/schemas.py — Pydantic v2:
-	∙	CommitInfo: sha, short_sha, title, author, date, url
-	∙	MergeRequestInfo: iid, title, state, source_branch, target_branch, author, url
-	∙	PipelineInfo: id, status, ref, created_at, url
-	∙	GitLabResult: operation:str, success:bool, data:list[dict], summary:str, error:str|None — this is the output_schema for gitlab_agent
-domains/gitlab/transformers.py — pure functions, input is raw python-gitlab SDK dict:
-	∙	raw_to_commit(raw: dict) -> CommitInfo
-	∙	raw_to_mr(raw: dict) -> MergeRequestInfo
-	∙	raw_to_pipeline(raw: dict) -> PipelineInfo
-domains/gitlab/prompts/coordinator_v1.py
+    if not requires_approval:
+        logger.debug(f"[approval_cb] {tool_name} — no approval needed")
+        return None
 
-COORDINATOR_V1 = """
-You are a coordinator. Route user requests to the correct workflow.
-Available: gitlab_workflow — handles ALL GitLab requests (commits, MRs, pipelines).
-Route only. Do not answer questions yourself.
-If not GitLab-related, say so and stop.
+    logger.info(f"[approval_cb] {tool_name} — requires approval")
+
+    auto_approve = os.getenv("AUTO_APPROVE", "false").lower()
+    if auto_approve == "true":
+        agent_name = getattr(callback_context, "agent_name", "unknown")
+        tool_name = getattr(tool, "name", "unknown") if tool else "unknown"
+        tracker.log_agent_event(
+            "auto_approved",
+            agent_name,
+            {"tool": tool_name, "warning": "AUTO_APPROVE bypassed confirmation"},
+        )
+        return None
+
+    # Return a content block asking for confirmation
+    tool_name = getattr(tool, "name", "this tool") if tool else "this tool"
+    tool_args = getattr(callback_context, "tool_call_args", {}) or {}
+
+    try:
+        from google.genai import types as genai_types
+        msg = (
+            f"This action requires approval.\n"
+            f"Tool: **{tool_name}**\n"
+            f"Arguments: {tool_args}\n\n"
+            f"Please confirm (yes/no)."
+        )
+        return genai_types.Content(
+            role="model",
+            parts=[genai_types.Part(text=msg)],
+        )
+    except ImportError:
+        return None
+EOF
+
+# Copy of composer.py
+cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/composer_copy.py << 'EOF'
+"""Shared callback registry — used by framework/factory.py.
+
+SHARED_REGISTRY maps names (referenced in agent YAML files under callbacks:)
+to the actual callable. factory.py resolves names to callables and passes
+them as lists directly to LlmAgent — ADK iterates the list natively.
+
+Callback signatures (enforced by ADK):
+  before_agent_callback / after_agent_callback : (context) -> Optional[Content]
+  after_tool_callback                           : (tool, args, context, response) -> Optional[dict]
 """
+from typing import Callable
+
+from framework.callbacks.before_agent_cb import before_agent_cb
+from framework.callbacks.after_agent_cb import after_agent_cb
+from framework.callbacks.narration_cb import narration_cb
+from framework.callbacks.logging_cb import logging_cb
+from framework.callbacks.approval_cb import approval_cb
+from framework.callbacks.tool_state_cb import tool_state_cb
+
+SHARED_REGISTRY: dict[str, Callable] = {
+    # before/after agent — signature: (context)
+    "before_agent_cb": before_agent_cb,
+    "after_agent_cb":  after_agent_cb,
+    "narration_cb":    narration_cb,
+    "approval_cb":     approval_cb,
+    # after_tool — signature: (tool, args, context, response)
+    "logging_cb":      logging_cb,
+    "tool_state_cb":   tool_state_cb,
+}
+EOF
+
+# Copy of logging_cb.py
+cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/logging_cb_copy.py << 'EOF'
+"""after_tool_callback — logs every tool call to the observability tracker."""
+import logging
+from observability.tracker import tracker
+
+logger = logging.getLogger("platform.callbacks")
 
 
-domains/gitlab/prompts/gitlab_agent_v1.py
+def logging_cb(tool, args, tool_context, tool_response) -> None:
+    """Log tool call outcome to the append-only JSONL tracer."""
+    tool_name = getattr(tool, "name", str(tool))
+    agent_name = getattr(tool_context, "agent_name", None) or "unknown"
+    success = "error" not in (tool_response or {})
+    response_preview = str(tool_response)[:200] if tool_response else "(empty)"
+    status = "📦 Got results" if success else "❌ Error"
+    logger.info(f"{status} from {tool_name} (called by {agent_name})")
+    logger.debug(f"   📥 args: {args}")
+    logger.debug(f"   📤 response: {response_preview}")
+    tracker.log_tool_call(agent_name, tool_name, success, 0.0)
+    return None
+EOF
 
-GITLAB_AGENT_V1 = """
-You are a GitLab agent with tools to query and manage GitLab.
-Always call a tool — never answer from memory.
-Think step by step. State which tool you will call and why before calling it.
-For write operations (create_mr, trigger_pipeline): confirm details before executing.
-Default project: {gitlab_default_project}
+# Copy of master.py
+cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/master_copy.py << 'EOF'
+"""Master callbacks — one per ADK hook type.
+
+The factory wires these 6 callbacks into every agent. Each one:
+  1. Logs the event (narrated style)
+  2. Calls any agent-specific hooks from YAML
+
+Agent YAML only needs to declare agent-specific callbacks under:
+  callbacks:
+    agent_before: [my_before_cb]
+    agent_after:  [my_after_cb]
+
+Logging/tracing/state persistence is automatic — no YAML config needed.
 """
+import logging
+import os
 
+from observability.tracker import tracker
 
-framework/schema_registry.py — maps string name to class:
+logger = logging.getLogger("platform.agent")
 
-from domains.gitlab.schemas import GitLabResult
-SCHEMAS = { "GitLabResult": GitLabResult }
-def resolve(name: str | None): return SCHEMAS.get(name) if name else None
-
-
-framework/prompt_registry.py — maps prompt_id to string:
-
-from domains.gitlab.prompts.coordinator_v1 import COORDINATOR_V1
-from domains.gitlab.prompts.gitlab_agent_v1 import GITLAB_AGENT_V1
-PROMPTS = { "coordinator_v1": COORDINATOR_V1, "gitlab_agent_v1": GITLAB_AGENT_V1 }
-def get(prompt_id: str) -> str: return PROMPTS[prompt_id]
-
-
-Verify: python -c "from domains.gitlab.schemas import GitLabResult; print(GitLabResult.model_fields)" — no errors.
-
-SUB-AGENT 3 — framework-callbacks-and-session
-Build session manager, all 4 callbacks, and composer. Depends on ToolResult shape from Sub-Agent 1 — import only from tools.base_tool, nothing else from Sub-Agent 1.
-framework/session_manager.py
-Module-level singleton. Three scopes backed by plain dicts for Day 1.
-	∙	session: — per-run, cleared after each run
-	∙	user: — keyed by user_id, lives for process lifetime
-	∙	app: — populated once at startup from env
-
-class SessionManager:
-    def get(self, scope_key: str, default=None)   # "app:gitlab_default_project"
-    def set(self, scope_key: str, value)
-    def clear_session_scope(self)
-    def init_app_scope(self)   # reads env vars into app: keys
-
-session_mgr = SessionManager()   # singleton
-
-
-init_app_scope() populates:
-	∙	app:tool_mode from TOOL_MODE env (default local)
-	∙	app:gitlab_default_project from GITLAB_DEFAULT_PROJECT env
-	∙	app:allowed_agents from ALLOWED_AGENTS env (default *)
-framework/callbacks/before_agent_cb.py
-Controller — returns LlmResponse to block or None to proceed.
-	1.	Permission check: read app:allowed_agents from session_mgr. If not * and callback_context.agent.name not in list → return LlmResponse(content=[Part(text="Agent not permitted.")]).
-	2.	Session injection: if agent is gitlab_agent, write callback_context.state['gitlab_default_project'] = session_mgr.get('app:gitlab_default_project').
-framework/callbacks/after_agent_cb.py
-Controller — returns None.
-	1.	Write agent output to session: callback_context.state[f"{callback_context.agent.name}_output"] = callback_context.state.get('_output').
-	2.	Set checkpoint: callback_context.state[f"checkpoint_{callback_context.agent.name}"] = True.
-	3.	If agent is gitlab_agent and output has success=False, write callback_context.state['gitlab_last_error'] = output.error.
-framework/callbacks/before_model_cb.py
-Observer — returns None. Appends narration style to system instruction:
-	∙	gitlab_agent → append "Think step by step. State which tool you will call and why."
-	∙	all others → nothing
-framework/callbacks/after_tool_cb.py
-Observer — returns None. Appends one JSON line to reports/traces/tool_calls.jsonl:
-
-{"agent": "...", "tool": "...", "success": true, "timestamp": "..."}
-
-
-Creates file and parent dirs if they don’t exist.
-framework/composer.py
-
-CALLBACK_REGISTRY = {
-    "before_agent_cb":  before_agent_cb,
-    "after_agent_cb":   after_agent_cb,
-    "before_model_cb":  before_model_cb,
-    "after_tool_cb":    after_tool_cb,
+# tool_name -> session state key (auto-persist after tool calls)
+_PERSIST: dict[str, str] = {
+    "gitlab_list_commits":     "gitlab_commits",
+    "gitlab_list_mrs":         "gitlab_mrs",
+    "gitlab_list_pipelines":   "gitlab_pipelines",
+    "gitlab_list_projects":    "gitlab_projects",
+    "get_watch_summary":       "watch_summary",
+    "get_binge_sessions":      "binge_sessions",
+    "get_top_channels":        "top_channels",
+    "check_user_entitlements": "entitlement_result",
 }
 
-def compose(names: list[str]) -> callable | None:
-    # empty list → return None
-    # one name → return function directly
-    # multiple → return wrapper that calls each in order,
-    #            returns first non-None (controller pattern)
-
-
-Verify: python -c "from framework.composer import compose; print(compose(['before_agent_cb']))" — prints a callable.
-
-SUB-AGENT 4 — factory-and-configs
-Build YAMLs, factory, resolver, and main. Reads interfaces from Sub-Agents 1–3. Start after confirming their module names.
-agent_configs/coordinator_agent.yaml
-
-agent_id: coordinator_agent
-enabled: true
-model: gemini-2.0-flash
-prompt_id: coordinator_v1
-tools: []
-output_schema: null
-callbacks:
-  before: []
-  after: []
-  before_model: []
-  after_tool: []
-
-
-agent_configs/gitlab_agent.yaml
-
-agent_id: gitlab_agent
-enabled: true
-model: gemini-2.0-flash
-prompt_id: gitlab_agent_v1
-tools:
-  - gitlab_list_commits
-  - gitlab_get_commit
-  - gitlab_list_mrs
-  - gitlab_get_mr
-  - gitlab_create_mr
-  - gitlab_list_pipelines
-  - gitlab_get_pipeline
-  - gitlab_trigger_pipeline
-output_schema: GitLabResult
-callbacks:
-  before: [before_agent_cb]
-  after: [after_agent_cb]
-  before_model: [before_model_cb]
-  after_tool: [after_tool_cb]
-
-
-workflow_configs/gitlab_workflow.yaml
-
-workflow_id: gitlab_workflow
-type: SequentialAgent
-enabled: true
-agents:
-  - gitlab_agent
-callbacks:
-  before: [before_agent_cb]
-  after: [after_agent_cb]
 
-
-framework/resolver.py
-
-# Called once at startup by Factory per agent
-# resolve(tool_names: list[str]) -> list[callable]
-#   for each name: tool = registry.get(name); append tool.to_adk_function()
-#   return list of ADK-compatible callables
-
-
-framework/factory.py
-
-# TOP OF FILE — triggers self-registration before any YAML is read
-import tools.gitlab.gitlab_local
-
-class Factory:
-    def __init__(self):
-        # scan agent_configs/*.yaml → self.agent_configs
-        # scan workflow_configs/*.yaml → self.workflow_configs
-
-    def create_agent(self, agent_id) -> LlmAgent:
-        # load config
-        # raise AgentDisabledError if enabled=false
-        # tools = resolver.resolve(config['tools'])
-        # instruction = prompt_registry.get(config['prompt_id'])
-        # output_schema = schema_registry.resolve(config['output_schema'])
-        # wire callbacks via composer.compose() for each hook
-        # return LlmAgent(name, model, instruction, tools, output_schema,
-        #                 before_agent_callback, after_agent_callback,
-        #                 before_model_callback, after_tool_callback)
-
-    def create_workflow(self, workflow_id) -> SequentialAgent:
-        # build sub-agents from agents list in YAML
-        # return SequentialAgent(sub_agents=agents,
-        #                        before_agent_callback=...,
-        #                        after_agent_callback=...)
-
-    def bootstrap(self) -> LlmAgent:
-        # create all enabled workflows
-        # create coordinator_agent
-        # coordinator.sub_agents = [all workflows]
-        # return coordinator
-
-
-main.py
-
-from framework.factory import Factory
-from framework.session_manager import session_mgr
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-
-session_mgr.init_app_scope()
-coordinator = Factory().bootstrap()
-runner = Runner(
-    agent=coordinator,
-    app_name="agentic-platform",
-    session_service=InMemorySessionService()
-)
-
-
-.env.example
-
-GITLAB_URL=https://gitlab.com
-GITLAB_TOKEN=your_token
-GITLAB_DEFAULT_PROJECT=group/repo
-TOOL_MODE=local
-ALLOWED_AGENTS=*
-
-
-requirements.txt
-
-google-adk
-python-gitlab
-pydantic>=2.0
-python-dotenv
-pyyaml
-
-
-Verify: python -c "from framework.factory import Factory; Factory().bootstrap(); print('Factory OK')"
-
-Orchestrator: integration steps after all 4 complete
-	1.	Ensure every directory has __init__.py
-	2.	Run each sub-agent’s verify command — all must pass before continuing
-	3.	adk web — must start with zero import errors
-	4.	Send: "list the last 5 commits on main" — trace: coordinator → gitlab_workflow → gitlab_agent → gitlab_list_commits called → entry in reports/traces/tool_calls.jsonl
-	5.	Send: "create an MR from feature/x to main titled Test MR" — agent must confirm before calling gitlab_create_mr
-	6.	If any interface mismatch found (ToolResult fields, callback signatures, session key format) — fix in place before closing​​​​​​​​​​​​​​​​
-
-
-
-
-Option 1 (Most balanced):
-
-She has single-handedly navigated complex DevOps responsibilities, proactively upskilling herself in GS processes and technologies while effectively managing delivery pressure and streamlining our division’s tech-risk remediation. Her ownership mindset, mentorship of teammates, and drive to continuously challenge herself make her a strong candidate for the next role promotion accelerator program.
-
-Option 2 (More leadership focused):
-
-She consistently demonstrates strong ownership by independently managing DevOps operations, driving tech-risk mitigation across the division, and guiding team members with clear, detail-oriented communication while continuously investing in self-learning and growth.
-
-Option 3 (Very crisp – leadership summary):
-
-A highly motivated self-learner who has independently managed DevOps responsibilities, streamlined tech-risk remediation, and supported team members through clear communication and guidance, demonstrating strong readiness for accelerated growth.
-
-
-Perfect — here is your final, clean, complete project tree for the agent platform, incorporating:
-	•	Prompt service (LLM gateway)
-	•	MCP integration
-	•	Tools abstraction
-	•	Planner/router/workflow agents
-	•	Human-in-loop support
-	•	Sessions
-	•	Async execution
-	•	Schemas & validation
-
-This is the version you can give directly to Copilot or put into Confluence as the official architecture.
-
-⸻
-
-🏗️ COMPLETE FINAL PROJECT TREE
-
-agent-platform/
-
-app/
-│
-├── api/                              # External HTTP entrypoints
-│   └── server.py                     # ask(), run_agent(), resume(), task_status(), health()
-│
-├── orchestrator/                     # Request lifecycle & session orchestration
-│   └── orchestrator.py               # handle_request(), run_specific_agent(), resume_session()
-│
-├── runner/                           # Core execution engine for agents/workflows
-│   └── runner.py                     # run_agent(), _run_router(), _run_planner(), _run_workflow()
-│
-├── agents/                           # Agent definitions, registry, wrappers
-│   ├── definitions.py                # AgentDefinition class
-│   ├── loader.py                     # load_all_agents(), load_agent()
-│   ├── registry.py                   # register(), get(), list_agents()
-│   └── wrappers.py                   # wrap_agent() → allows agent-to-agent calls
-│
-├── tools/                            # Unified runtime tool layer (ALL tools appear here)
-│   ├── loader.py                     # load_tools(agent_def)
-│   ├── builder.py                    # build_tool(meta) → create callable wrapper
-│   ├── local_loader.py               # load_local_tools() from local_tools/
-│   ├── mcp_loader.py                 # fetch MCP metadata + convert to callable tools
-│   └── agent_loader.py               # expose sub-agents as callable tools
-│
-├── mcp/                              # MCP CLIENT (communication infrastructure only)
-│   ├── registry_client.py            # get_servers()
-│   ├── discovery_client.py           # get_tools(server_url)
-│   ├── execution_client.py           # execute(server_url, tool_name, args)
-│   ├── health_client.py              # check_health(server_url)
-│   └── cache.py                      # cache MCP tools metadata
-│
-├── sessions/                         # Conversation persistence + HITL state
-│   ├── session_manager.py            # create_session(), get_session(), save_session()
-│   └── models.py                     # Session model (history, state, pending_agent, status)
-│
-├── async_exec/                       # Background execution for long tasks
-│   ├── task_manager.py               # submit_agent_task(), get_status(), get_result()
-│   ├── worker.py                     # run_task() → calls runner.run_agent()
-│   └── queue_backend.py              # enqueue(), dequeue(), store_result()
-│
-├── services/                         # Shared platform services
-│   └── prompt_service.py             # YOUR LLM gateway: generate(), generate_json(), stream()
-│
-├── schemas/                          # JSON schemas & validation contracts
-│   ├── envelope_schema.py            # standard response structure
-│   ├── router_schema.py              # router output format
-│   ├── agent_schema.py               # default planner/domain output schema
-│   └── tool_schema.py                # tool metadata structure
-│
-├── utils/                            # Stateless helpers only
-│   ├── json_utils.py                 # safe_json_load(), extract_json()
-│   ├── schema.py                     # validate(), repair()
-│   ├── retry.py                      # retry(func, attempts)
-│   ├── ids.py                        # generate_request_id(), generate_session_id()
-│   └── tracing.py                    # start_trace(), log_event(), end_trace()
-│
-└── config/                           # Environment settings & feature flags
-    └── settings.py                   # load_settings(), constants
-
-
-# ---------------------------------------------------
-# CONTENT / EXTENSION FOLDERS (outside app/)
-# ---------------------------------------------------
-
-agents-config/                        # YAML configs for router/planner/domain agents
-│   ├── router_agent.yaml
-│   ├── survey_planner.yaml
-│   ├── hr_planner.yaml
-│   └── summary_agent.yaml
-
-local_tools/                          # Python tools available locally
-│   ├── analytics.py
-│   ├── formatter.py
-│   └── notifier.py
-
-custom_workflows/                     # Deterministic or hybrid workflows
-│   ├── base_workflow.py              # BaseWorkflow class with run()
-│   ├── archive_projects_workflow.py
-│   └── report_generation_workflow.py
-
-
-⸻
-
-🧠 HOW THIS TREE WORKS (SIMPLE FLOW)
-
-Normal planner request
-
-API → orchestrator → runner
-     → agents-config loads planner
-     → tools loader builds tools (local + MCP + agents)
-     → prompt_service runs reasoning
-     → result validated by schemas
-     → session saved
-
-
-⸻
-
-MCP tool call
-
-planner → tools wrapper
-       → mcp.execution_client.execute()
-       → MCP server
-
-
-⸻
-
-Human-in-loop
-
-planner returns status=needs_input
-→ runner marks session paused
-→ orchestrator.resume_session() later
-→ runner runs same agent with updated history
-
-
-⸻
-
-Custom workflow
-
-runner detects agent.type=workflow
-→ loads class from custom_workflows/
-→ workflow.run() executes
-
-
-⸻
-
-🟢 DESIGN PRINCIPLES THIS TREE FOLLOWS
-	•	Runner = execution brain
-	•	Orchestrator = lifecycle manager
-	•	Tools = unified capability layer
-	•	MCP = network client only
-	•	Prompt service = only LLM access point
-	•	Sessions = state + HITL memory
-	•	Schemas = contracts enforced by runner
-
-This keeps everything:
-	•	modular
-	•	testable
-	•	scalable
-	•	enterprise-safe
-
-⸻
-
-If you want, I can next:
-
-✅ Give you a single Copilot prompt that generates this entire repo skeleton automatically
-✅ Provide starter code templates for each key file
-✅ Draw sequence diagram showing a planner calling MCP + human loop
-✅ Help you define coding conventions for your team
-
-Tell me which one you want next.
+# ── Helpers ───────────────────────────────────────────────────────────────
+
+def _run_agent_hooks(hooks, callback_context):
+    """Run agent-specific hooks (before_agent / after_agent signature)."""
+    for hook in hooks:
+        result = hook(callback_context)
+        if result is not None:
+            return result
+    return None
+
+
+def _run_tool_hooks(hooks, tool, args, tool_context, tool_response=None):
+    """Run agent-specific hooks (before_tool / after_tool signature)."""
+    for hook in hooks:
+        if tool_response is not None:
+            result = hook(tool, args, tool_context, tool_response)
+        else:
+            result = hook(tool, args, tool_context)
+        if result is not None:
+            return result
+    return None
+
+
+# ── Builder functions ─────────────────────────────────────────────────────
+# Each returns a callback with the correct ADK signature.
+# Agent-specific hooks are baked in via closure.
+
+
+def build_before_agent(agent_hooks: list = None):
+    """before_agent_callback: (callback_context) -> Optional[Content]"""
+    hooks = agent_hooks or []
+
+    def before_agent(callback_context):
+        agent_name = getattr(callback_context, "agent_name", "unknown")
+        logger.info(f"🤔 Waking up {agent_name}...")
+
+        # Permission check
+        allowed = os.getenv("ALLOWED_AGENTS", "*")
+        if allowed != "*":
+            permitted = [a.strip() for a in allowed.split(",")]
+            if agent_name not in permitted:
+                logger.warning(f"🚫 Blocked {agent_name} — not in ALLOWED_AGENTS")
+                try:
+                    from google.genai import types as genai_types
+                    return genai_types.Content(
+                        role="model",
+                        parts=[genai_types.Part(text=f"Agent '{agent_name}' is not permitted.")],
+                    )
+                except ImportError:
+                    pass
+
+        # Run agent-specific hooks
+        result = _run_agent_hooks(hooks, callback_context)
+        if result is not None:
+            return result
+
+        logger.info(f"✅ {agent_name} ready")
+        return None
+
+    return before_agent
+
+
+def build_after_agent(agent_hooks: list = None):
+    """after_agent_callback: (callback_context) -> Optional[Content]"""
+    hooks = agent_hooks or []
+
+    def after_agent(callback_context):
+        agent_name = getattr(callback_context, "agent_name", "unknown")
+        logger.info(f"🏁 {agent_name} finished")
+
+        # Checkpoint
+        callback_context.state[f"checkpoint_{agent_name}"] = True
+
+        # Validation error check
+        validation_error = callback_context.state.get("_validation_error")
+        if validation_error:
+            logger.warning(f"⚠️  Validation error in {agent_name}: {validation_error}")
+            tracker.log_agent_event("validation_error", agent_name, {"error": validation_error})
+
+        # Run agent-specific hooks
+        result = _run_agent_hooks(hooks, callback_context)
+        if result is not None:
+            return result
+
+        # Debug: log all state keys
+        try:
+            all_keys = list(callback_context.state._state.keys()) if hasattr(callback_context.state, '_state') else []
+            logger.info(f"📊 {agent_name} state keys: {all_keys}")
+        except Exception as e:
+            logger.debug(f"   Could not read state keys: {e}")
+        logger.info(f"✅ {agent_name} checkpoint saved")
+        return None
+
+    return after_agent
+
+
+def build_before_model(agent_hooks: list = None):
+    """before_model_callback: (callback_context, llm_request) -> Optional[LlmResponse]"""
+    hooks = agent_hooks or []
+
+    def before_model(callback_context, llm_request):
+        agent_name = getattr(callback_context, "agent_name", "unknown")
+        logger.info(f"🧠 {agent_name} thinking...")
+
+        # Log what's being sent
+        if llm_request:
+            contents = getattr(llm_request, "contents", None)
+            if contents:
+                logger.debug(f"   📨 Sending {len(contents)} messages to model")
+                # Log last user message
+                last = contents[-1] if contents else None
+                if last:
+                    parts = getattr(last, "parts", []) or []
+                    for part in parts[:2]:
+                        text = getattr(part, "text", None)
+                        if text:
+                            logger.debug(f"   💬 Last message: {text[:150]}")
+
+            # Log available tools
+            tools = getattr(llm_request, "tools", None)
+            if tools:
+                tool_names = []
+                for t in tools:
+                    decls = getattr(t, "function_declarations", None) or []
+                    tool_names.extend(d.name for d in decls)
+                if tool_names:
+                    logger.debug(f"   🔧 Tools available: {tool_names}")
+
+        # Run agent-specific hooks (e.g. narration injection)
+        for hook in hooks:
+            result = hook(callback_context, llm_request)
+            if result is not None:
+                return result
+
+        return None
+
+    return before_model
+
+
+def build_after_model(agent_hooks: list = None):
+    """after_model_callback: (callback_context, llm_response) -> Optional[LlmResponse]"""
+    hooks = agent_hooks or []
+
+    def after_model(callback_context, llm_response):
+        agent_name = getattr(callback_context, "agent_name", "unknown")
+
+        if llm_response:
+            content = getattr(llm_response, "content", None)
+            if content:
+                parts = getattr(content, "parts", []) or []
+                for part in parts[:3]:
+                    text = getattr(part, "text", None)
+                    if text:
+                        logger.info(f"💭 {agent_name} says: {text[:200]}")
+                    fc = getattr(part, "function_call", None)
+                    if fc:
+                        args = dict(fc.args) if getattr(fc, "args", None) else {}
+                        logger.info(f"🔍 {agent_name} calling tool: {fc.name}({args})")
+
+        # Run agent-specific hooks
+        for hook in hooks:
+            result = hook(callback_context, llm_response)
+            if result is not None:
+                return result
+
+        return None
+
+    return after_model
+
+
+def build_before_tool(agent_hooks: list = None):
+    """before_tool_callback: (tool, args, tool_context) -> Optional[dict]"""
+    hooks = agent_hooks or []
+
+    def before_tool(tool, args, tool_context):
+        tool_name = getattr(tool, "name", str(tool))
+        logger.info(f"⚡ Calling {tool_name}...")
+        logger.debug(f"   📥 args: {args}")
+
+        # Run agent-specific hooks
+        return _run_tool_hooks(hooks, tool, args, tool_context)
+
+    return before_tool
+
+
+def build_after_tool(agent_hooks: list = None):
+    """after_tool_callback: (tool, args, tool_context, tool_response) -> Optional[dict]"""
+    hooks = agent_hooks or []
+
+    def after_tool(tool, args, tool_context, tool_response):
+        tool_name = getattr(tool, "name", str(tool))
+        agent_name = getattr(tool_context, "agent_name", "unknown")
+        success = "error" not in (tool_response or {})
+
+        # Logging
+        if success:
+            logger.info(f"📦 Got results from {tool_name}")
+        else:
+            error = (tool_response or {}).get("error", "unknown error")
+            logger.warning(f"❌ {tool_name} failed: {error}")
+        logger.debug(f"   📤 response: {str(tool_response)[:200]}")
+
+        # Tracker
+        tracker.log_tool_call(agent_name, tool_name, success, 0.0)
+
+        # State persistence
+        state_key = _PERSIST.get(tool_name)
+        if state_key:
+            logger.info(f"💾 Saving to state['{state_key}']")
+            tool_context.state[state_key] = tool_response
+            logger.info(f"📋 Saved {len(str(tool_response))} chars to state['{state_key}']")
+
+        # Run agent-specific hooks
+        return _run_tool_hooks(hooks, tool, args, tool_context, tool_response)
+
+    return after_tool
+EOF
+
+# Copy of validation_callback.py
+cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/validation_callback_copy.py << 'EOF'
+from framework.callbacks.base_callback import BaseCallback, CallbackEvent
+from framework.exceptions import ValidationError as FrameworkValidationError
+from framework.validation.registry import validator_registry
+
+
+class ValidationCallback(BaseCallback):
+    """On after_agent, runs all registered validators. Raises ValidationError if score < 0.5."""
+
+    async def after_agent(self, event: CallbackEvent) -> None:
+        output = event.payload.get("output", {})
+        context = {
+            "agent_name": event.agent_name,
+            "run_id": event.run_id,
+            "session": event.session,
+        }
+
+        results = await validator_registry.run_all(output, context)
+
+        errors: list[str] = []
+        for result in results:
+            if result.score < 0.5:
+                errors.extend(result.errors)
+
+        if errors:
+            raise FrameworkValidationError(
+                agent_name=event.agent_name,
+                errors=errors,
+                reason="One or more validators returned score below threshold",
+            )
+EOF
+
+# Copy of __init__.py
+cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/__init___copy.py << 'EOF'
+
+EOF
