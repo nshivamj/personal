@@ -1,470 +1,90 @@
-# Copy of before_agent_cb.py
-cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/before_agent_cb_copy.py << 'EOF'
-"""Shared default before-agent callback (controller)."""
-import logging
-import os
-
-logger = logging.getLogger("platform.callbacks")
-
-
-def before_agent_cb(callback_context):
-    """
-    1. Permission check — if ALLOWED_AGENTS != '*', block unlisted agents.
-    2. Session injection — write user_goals into callback_context.state if present.
-    """
-    agent_name = getattr(callback_context, "agent_name", "") or ""
-    logger.info(f"🤔 Waking up {agent_name}... checking permissions")
-
-    # 1. Permission check
-    allowed = os.getenv("ALLOWED_AGENTS", "*")
-    if allowed != "*":
-        permitted = [a.strip() for a in allowed.split(",")]
-        if agent_name not in permitted:
-            logger.warning(f"🚫 Blocked! {agent_name} is not in the allowed list")
-            try:
-                from google.genai import types as genai_types
-                return genai_types.Content(
-                    role="model",
-                    parts=[genai_types.Part(text=f"Agent '{agent_name}' is not permitted.")],
-                )
-            except ImportError:
-                pass  # ADK not installed yet — skip blocking during tests
-
-    # 2. Session injection — pull user_goals from ADK session state if set
-    goals = callback_context.state.get("user_goals")
-    if goals:
-        callback_context.state["user_goals"] = goals
-
-    return None
-EOF
-
-# Copy of after_agent_cb.py
-cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/after_agent_cb_copy.py << 'EOF'
-"""Shared default after-agent callback (controller)."""
-import logging
-from observability.tracker import tracker
-
-logger = logging.getLogger("platform.callbacks")
-
-
-def after_agent_cb(callback_context):
-    """
-    1. Semantic validation — log _validation_error if set.
-    2. Checkpoint — write {agent_name}_output and checkpoint_{agent_name} to state.
-    """
-    agent_name = getattr(callback_context, "agent_name", "") or "unknown"
-    logger.info(f"✅ {agent_name} finished — saving checkpoint")
-
-    # 1. Validation error
-    validation_error = callback_context.state.get("_validation_error")
-    if validation_error:
-        tracker.log_agent_event("validation_error", agent_name, {"error": validation_error})
-
-    # 2. Checkpoint
-    output = getattr(callback_context, "output", None)
-    if output is not None:
-        callback_context.state[f"{agent_name}_output"] = output
-    callback_context.state[f"checkpoint_{agent_name}"] = True
-
-    return None
-EOF
-
-# Copy of approval_cb.py
-cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/approval_cb_copy.py << 'EOF'
-"""Shared default approval callback (controller, before_tool)."""
-import logging
-import os
-from observability.tracker import tracker
-
-logger = logging.getLogger("platform.callbacks")
-
-
-def approval_cb(callback_context):
-    """Gate write tools behind human approval unless AUTO_APPROVE=true."""
-    tool = getattr(callback_context, "tool", None)
-    requires_approval = getattr(tool, "requires_approval", False) if tool else False
-    tool_name = getattr(tool, "name", "unknown") if tool else "unknown"
-
-    if not requires_approval:
-        logger.debug(f"[approval_cb] {tool_name} — no approval needed")
-        return None
-
-    logger.info(f"[approval_cb] {tool_name} — requires approval")
-
-    auto_approve = os.getenv("AUTO_APPROVE", "false").lower()
-    if auto_approve == "true":
-        agent_name = getattr(callback_context, "agent_name", "unknown")
-        tool_name = getattr(tool, "name", "unknown") if tool else "unknown"
-        tracker.log_agent_event(
-            "auto_approved",
-            agent_name,
-            {"tool": tool_name, "warning": "AUTO_APPROVE bypassed confirmation"},
-        )
-        return None
-
-    # Return a content block asking for confirmation
-    tool_name = getattr(tool, "name", "this tool") if tool else "this tool"
-    tool_args = getattr(callback_context, "tool_call_args", {}) or {}
-
-    try:
-        from google.genai import types as genai_types
-        msg = (
-            f"This action requires approval.\n"
-            f"Tool: **{tool_name}**\n"
-            f"Arguments: {tool_args}\n\n"
-            f"Please confirm (yes/no)."
-        )
-        return genai_types.Content(
-            role="model",
-            parts=[genai_types.Part(text=msg)],
-        )
-    except ImportError:
-        return None
-EOF
-
-# Copy of composer.py
-cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/composer_copy.py << 'EOF'
-"""Shared callback registry — used by framework/factory.py.
-
-SHARED_REGISTRY maps names (referenced in agent YAML files under callbacks:)
-to the actual callable. factory.py resolves names to callables and passes
-them as lists directly to LlmAgent — ADK iterates the list natively.
-
-Callback signatures (enforced by ADK):
-  before_agent_callback / after_agent_callback : (context) -> Optional[Content]
-  after_tool_callback                           : (tool, args, context, response) -> Optional[dict]
-"""
-from typing import Callable
-
-from framework.callbacks.before_agent_cb import before_agent_cb
-from framework.callbacks.after_agent_cb import after_agent_cb
-from framework.callbacks.narration_cb import narration_cb
-from framework.callbacks.logging_cb import logging_cb
-from framework.callbacks.approval_cb import approval_cb
-from framework.callbacks.tool_state_cb import tool_state_cb
-
-SHARED_REGISTRY: dict[str, Callable] = {
-    # before/after agent — signature: (context)
-    "before_agent_cb": before_agent_cb,
-    "after_agent_cb":  after_agent_cb,
-    "narration_cb":    narration_cb,
-    "approval_cb":     approval_cb,
-    # after_tool — signature: (tool, args, context, response)
-    "logging_cb":      logging_cb,
-    "tool_state_cb":   tool_state_cb,
-}
-EOF
-
-# Copy of logging_cb.py
-cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/logging_cb_copy.py << 'EOF'
-"""after_tool_callback — logs every tool call to the observability tracker."""
-import logging
-from observability.tracker import tracker
-
-logger = logging.getLogger("platform.callbacks")
-
-
-def logging_cb(tool, args, tool_context, tool_response) -> None:
-    """Log tool call outcome to the append-only JSONL tracer."""
-    tool_name = getattr(tool, "name", str(tool))
-    agent_name = getattr(tool_context, "agent_name", None) or "unknown"
-    success = "error" not in (tool_response or {})
-    response_preview = str(tool_response)[:200] if tool_response else "(empty)"
-    status = "📦 Got results" if success else "❌ Error"
-    logger.info(f"{status} from {tool_name} (called by {agent_name})")
-    logger.debug(f"   📥 args: {args}")
-    logger.debug(f"   📤 response: {response_preview}")
-    tracker.log_tool_call(agent_name, tool_name, success, 0.0)
-    return None
-EOF
-
-# Copy of master.py
-cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/master_copy.py << 'EOF'
-"""Master callbacks — one per ADK hook type.
-
-The factory wires these 6 callbacks into every agent. Each one:
-  1. Logs the event (narrated style)
-  2. Calls any agent-specific hooks from YAML
-
-Agent YAML only needs to declare agent-specific callbacks under:
-  callbacks:
-    agent_before: [my_before_cb]
-    agent_after:  [my_after_cb]
-
-Logging/tracing/state persistence is automatic — no YAML config needed.
-"""
-import logging
-import os
-
-from observability.tracker import tracker
-
-logger = logging.getLogger("platform.agent")
-
-# tool_name -> session state key (auto-persist after tool calls)
-_PERSIST: dict[str, str] = {
-    "gitlab_list_commits":     "gitlab_commits",
-    "gitlab_list_mrs":         "gitlab_mrs",
-    "gitlab_list_pipelines":   "gitlab_pipelines",
-    "gitlab_list_projects":    "gitlab_projects",
-    "get_watch_summary":       "watch_summary",
-    "get_binge_sessions":      "binge_sessions",
-    "get_top_channels":        "top_channels",
-    "check_user_entitlements": "entitlement_result",
-}
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────
-
-def _run_agent_hooks(hooks, callback_context):
-    """Run agent-specific hooks (before_agent / after_agent signature)."""
-    for hook in hooks:
-        result = hook(callback_context)
-        if result is not None:
-            return result
-    return None
-
-
-def _run_tool_hooks(hooks, tool, args, tool_context, tool_response=None):
-    """Run agent-specific hooks (before_tool / after_tool signature)."""
-    for hook in hooks:
-        if tool_response is not None:
-            result = hook(tool, args, tool_context, tool_response)
-        else:
-            result = hook(tool, args, tool_context)
-        if result is not None:
-            return result
-    return None
-
-
-# ── Builder functions ─────────────────────────────────────────────────────
-# Each returns a callback with the correct ADK signature.
-# Agent-specific hooks are baked in via closure.
-
-
-def build_before_agent(agent_hooks: list = None):
-    """before_agent_callback: (callback_context) -> Optional[Content]"""
-    hooks = agent_hooks or []
-
-    def before_agent(callback_context):
-        agent_name = getattr(callback_context, "agent_name", "unknown")
-        logger.info(f"🤔 Waking up {agent_name}...")
-
-        # Permission check
-        allowed = os.getenv("ALLOWED_AGENTS", "*")
-        if allowed != "*":
-            permitted = [a.strip() for a in allowed.split(",")]
-            if agent_name not in permitted:
-                logger.warning(f"🚫 Blocked {agent_name} — not in ALLOWED_AGENTS")
-                try:
-                    from google.genai import types as genai_types
-                    return genai_types.Content(
-                        role="model",
-                        parts=[genai_types.Part(text=f"Agent '{agent_name}' is not permitted.")],
-                    )
-                except ImportError:
-                    pass
-
-        # Run agent-specific hooks
-        result = _run_agent_hooks(hooks, callback_context)
-        if result is not None:
-            return result
-
-        logger.info(f"✅ {agent_name} ready")
-        return None
-
-    return before_agent
-
-
-def build_after_agent(agent_hooks: list = None):
-    """after_agent_callback: (callback_context) -> Optional[Content]"""
-    hooks = agent_hooks or []
-
-    def after_agent(callback_context):
-        agent_name = getattr(callback_context, "agent_name", "unknown")
-        logger.info(f"🏁 {agent_name} finished")
-
-        # Checkpoint
-        callback_context.state[f"checkpoint_{agent_name}"] = True
-
-        # Validation error check
-        validation_error = callback_context.state.get("_validation_error")
-        if validation_error:
-            logger.warning(f"⚠️  Validation error in {agent_name}: {validation_error}")
-            tracker.log_agent_event("validation_error", agent_name, {"error": validation_error})
-
-        # Run agent-specific hooks
-        result = _run_agent_hooks(hooks, callback_context)
-        if result is not None:
-            return result
-
-        # Debug: log all state keys
-        try:
-            all_keys = list(callback_context.state._state.keys()) if hasattr(callback_context.state, '_state') else []
-            logger.info(f"📊 {agent_name} state keys: {all_keys}")
-        except Exception as e:
-            logger.debug(f"   Could not read state keys: {e}")
-        logger.info(f"✅ {agent_name} checkpoint saved")
-        return None
-
-    return after_agent
-
-
-def build_before_model(agent_hooks: list = None):
-    """before_model_callback: (callback_context, llm_request) -> Optional[LlmResponse]"""
-    hooks = agent_hooks or []
-
-    def before_model(callback_context, llm_request):
-        agent_name = getattr(callback_context, "agent_name", "unknown")
-        logger.info(f"🧠 {agent_name} thinking...")
-
-        # Log what's being sent
-        if llm_request:
-            contents = getattr(llm_request, "contents", None)
-            if contents:
-                logger.debug(f"   📨 Sending {len(contents)} messages to model")
-                # Log last user message
-                last = contents[-1] if contents else None
-                if last:
-                    parts = getattr(last, "parts", []) or []
-                    for part in parts[:2]:
-                        text = getattr(part, "text", None)
-                        if text:
-                            logger.debug(f"   💬 Last message: {text[:150]}")
-
-            # Log available tools
-            tools = getattr(llm_request, "tools", None)
-            if tools:
-                tool_names = []
-                for t in tools:
-                    decls = getattr(t, "function_declarations", None) or []
-                    tool_names.extend(d.name for d in decls)
-                if tool_names:
-                    logger.debug(f"   🔧 Tools available: {tool_names}")
-
-        # Run agent-specific hooks (e.g. narration injection)
-        for hook in hooks:
-            result = hook(callback_context, llm_request)
-            if result is not None:
-                return result
-
-        return None
-
-    return before_model
-
-
-def build_after_model(agent_hooks: list = None):
-    """after_model_callback: (callback_context, llm_response) -> Optional[LlmResponse]"""
-    hooks = agent_hooks or []
-
-    def after_model(callback_context, llm_response):
-        agent_name = getattr(callback_context, "agent_name", "unknown")
-
-        if llm_response:
-            content = getattr(llm_response, "content", None)
-            if content:
-                parts = getattr(content, "parts", []) or []
-                for part in parts[:3]:
-                    text = getattr(part, "text", None)
-                    if text:
-                        logger.info(f"💭 {agent_name} says: {text[:200]}")
-                    fc = getattr(part, "function_call", None)
-                    if fc:
-                        args = dict(fc.args) if getattr(fc, "args", None) else {}
-                        logger.info(f"🔍 {agent_name} calling tool: {fc.name}({args})")
-
-        # Run agent-specific hooks
-        for hook in hooks:
-            result = hook(callback_context, llm_response)
-            if result is not None:
-                return result
-
-        return None
-
-    return after_model
-
-
-def build_before_tool(agent_hooks: list = None):
-    """before_tool_callback: (tool, args, tool_context) -> Optional[dict]"""
-    hooks = agent_hooks or []
-
-    def before_tool(tool, args, tool_context):
-        tool_name = getattr(tool, "name", str(tool))
-        logger.info(f"⚡ Calling {tool_name}...")
-        logger.debug(f"   📥 args: {args}")
-
-        # Run agent-specific hooks
-        return _run_tool_hooks(hooks, tool, args, tool_context)
-
-    return before_tool
-
-
-def build_after_tool(agent_hooks: list = None):
-    """after_tool_callback: (tool, args, tool_context, tool_response) -> Optional[dict]"""
-    hooks = agent_hooks or []
-
-    def after_tool(tool, args, tool_context, tool_response):
-        tool_name = getattr(tool, "name", str(tool))
-        agent_name = getattr(tool_context, "agent_name", "unknown")
-        success = "error" not in (tool_response or {})
-
-        # Logging
-        if success:
-            logger.info(f"📦 Got results from {tool_name}")
-        else:
-            error = (tool_response or {}).get("error", "unknown error")
-            logger.warning(f"❌ {tool_name} failed: {error}")
-        logger.debug(f"   📤 response: {str(tool_response)[:200]}")
-
-        # Tracker
-        tracker.log_tool_call(agent_name, tool_name, success, 0.0)
-
-        # State persistence
-        state_key = _PERSIST.get(tool_name)
-        if state_key:
-            logger.info(f"💾 Saving to state['{state_key}']")
-            tool_context.state[state_key] = tool_response
-            logger.info(f"📋 Saved {len(str(tool_response))} chars to state['{state_key}']")
-
-        # Run agent-specific hooks
-        return _run_tool_hooks(hooks, tool, args, tool_context, tool_response)
-
-    return after_tool
-EOF
-
-# Copy of validation_callback.py
-cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/validation_callback_copy.py << 'EOF'
-from framework.callbacks.base_callback import BaseCallback, CallbackEvent
-from framework.exceptions import ValidationError as FrameworkValidationError
-from framework.validation.registry import validator_registry
-
-
-class ValidationCallback(BaseCallback):
-    """On after_agent, runs all registered validators. Raises ValidationError if score < 0.5."""
-
-    async def after_agent(self, event: CallbackEvent) -> None:
-        output = event.payload.get("output", {})
-        context = {
-            "agent_name": event.agent_name,
-            "run_id": event.run_id,
-            "session": event.session,
-        }
-
-        results = await validator_registry.run_all(output, context)
-
-        errors: list[str] = []
-        for result in results:
-            if result.score < 0.5:
-                errors.extend(result.errors)
-
-        if errors:
-            raise FrameworkValidationError(
-                agent_name=event.agent_name,
-                errors=errors,
-                reason="One or more validators returned score below threshold",
-            )
-EOF
-
-# Copy of __init__.py
-cat > /Users/apple/Desktop/projects/youtube-agent-platform/framework/callbacks/__init___copy.py << 'EOF'
-
-EOF
+Plan to implement                                                                                           │
+│                                                                                                             │
+│ E2E Entitlement Testing Workflow                                                                            │
+│                                                                                                             │
+│ Context                                                                                                     │
+│                                                                                                             │
+│ Add an end-to-end workflow: LoopAgent(Planner → Reviewer) (plan + critique until approved) → Executor (runs │
+│  check_user_entitlements). Uses narration callbacks. Built as a Python workflow file — no factory changes   │
+│ needed.                                                                                                     │
+│                                                                                                             │
+│ Architecture                                                                                                │
+│                                                                                                             │
+│ entitlement_workflow (SequentialAgent)                                                                      │
+│   ├── review_loop (LoopAgent, max_iterations=3)                                                             │
+│   │     ├── entitlement_planner_agent  → creates/revises plan, output_key="entitlement_plan"                │
+│   │     └── entitlement_reviewer_agent → approves or critiques, sets state["review_approved"]               │
+│   └── entitlement_executor_agent   → reads plan, calls check_user_entitlements                              │
+│                                                                                                             │
+│ Loop flow: planner creates plan → reviewer critiques → planner revises based on feedback → reviewer         │
+│ approves → loop exits → executor runs.                                                                      │
+│                                                                                                             │
+│ Loop exit: reviewer_before_cb returns Content immediately if review_approved is True. Planner's             │
+│ before_agent_cb injects prior feedback so it can revise.                                                    │
+│                                                                                                             │
+│ Files to Create                                                                                             │
+│                                                                                                             │
+│ ┌───────────────────────────────────┬─────────────────────────────────────────────────────────────────────┐ │
+│ │               File                │                               Purpose                               │ │
+│ ├───────────────────────────────────┼─────────────────────────────────────────────────────────────────────┤ │
+│ │ workflows/entitlement_workflow.py │ Builds all 3 agents + LoopAgent + SequentialAgent, self-registers   │ │
+│ │                                   │ into WorkflowRegistry                                               │ │
+│ ├───────────────────────────────────┼─────────────────────────────────────────────────────────────────────┤ │
+│ │ workflows/__init__.py             │ Package init                                                        │ │
+│ └───────────────────────────────────┴─────────────────────────────────────────────────────────────────────┘ │
+│                                                                                                             │
+│ Files to Modify                                                                                             │
+│                                                                                                             │
+│ ┌─────────────────────────────────────┬───────────────────────────────────────────────────────────────────┐ │
+│ │                File                 │                              Change                               │ │
+│ ├─────────────────────────────────────┼───────────────────────────────────────────────────────────────────┤ │
+│ │ framework/callbacks/narration_cb.py │ Add 3 entries to NARRATION_MAP                                    │ │
+│ ├─────────────────────────────────────┼───────────────────────────────────────────────────────────────────┤ │
+│ │ main.py                             │ Import workflows.entitlement_workflow, build coordinator from     │ │
+│ │                                     │ registry                                                          │ │
+│ ├─────────────────────────────────────┼───────────────────────────────────────────────────────────────────┤ │
+│ │ coordinator_agent/agent.py          │ Same pattern as main.py                                           │ │
+│ └─────────────────────────────────────┴───────────────────────────────────────────────────────────────────┘ │
+│                                                                                                             │
+│ Implementation Details                                                                                      │
+│                                                                                                             │
+│ workflows/entitlement_workflow.py                                                                           │
+│                                                                                                             │
+│ Planner agent:                                                                                              │
+│ - No tools, output_key="entitlement_plan"                                                                   │
+│ - Prompt: create JSON plan with {checks: [{app_name, users, reason}]}                                       │
+│ - before_agent_callback: injects state["review_feedback"] so planner can revise on subsequent iterations    │
+│                                                                                                             │
+│ Reviewer agent:                                                                                             │
+│ - No tools                                                                                                  │
+│ - Prompt: review plan from {entitlement_plan}, output "APPROVED: ..." or "REVISE: ..."                      │
+│ - before_agent_callback: skip if already approved (return Content); inject plan from state                  │
+│ - after_agent_callback: parse output, set state["review_approved"] + state["review_feedback"]               │
+│                                                                                                             │
+│ Executor agent:                                                                                             │
+│ - Tool: check_user_entitlements                                                                             │
+│ - before_agent_callback: inject approved plan from state                                                    │
+│ - Prompt: execute each check in the plan, produce summary                                                   │
+│                                                                                                             │
+│ Composition:                                                                                                │
+│ review_loop = LoopAgent(name="review_loop", sub_agents=[planner, reviewer], max_iterations=3)               │
+│ workflow = SequentialAgent(name="entitlement_workflow", sub_agents=[review_loop, executor])                 │
+│ workflow_registry.register("entitlement_workflow", workflow, "Entitlement access control testing",          │
+│ triggers=["entitlement", "access", "permission"])                                                           │
+│                                                                                                             │
+│ main.py changes                                                                                             │
+│                                                                                                             │
+│ - Import workflows.entitlement_workflow (triggers self-registration)                                        │
+│ - Use workflow_registry to build coordinator with all workflows as sub_agents                               │
+│                                                                                                             │
+│ Narration entries (narration_cb.py)                                                                         │
+│                                                                                                             │
+│ - planner: "Be methodical, consider edge cases like stale accounts, output only valid JSON."                │
+│ - reviewer: "Be a skeptical security reviewer. Challenge assumptions, look for gaps in coverage."           │
+│ - executor: "Be precise and systematic. Execute each check in order, flag anomalies."                       │
+│                                                                                                             │
+│ Verification                                                                                                │
+│                                                                                                             │
+│ 1. python main.py — starts without errors                                                                   │
+│ 2. Send: "Run entitlement checks for Salesforce and Jira"                                                   │
+│ 3. Logs show: planner → reviewer (loop) → executor with narration   
