@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>RiskIntel Pro | Enterprise Risk Assessment</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-variant": "#d9e4ea",
+              "surface-dim": "#cfdce3",
+              "surface-container-highest": "#d9e4ea",
+              "on-error": "#fff7f6",
+              "on-tertiary": "#fff7f6",
+              "on-primary-container": "#0048bf",
+              "tertiary-fixed-dim": "#e72f2d",
+              "on-primary": "#f8f7ff",
+              "secondary-fixed-dim": "#c7d5ed",
+              "tertiary": "#c00815",
+              "on-secondary-container": "#455367",
+              "on-primary-fixed": "#003798",
+              "inverse-on-surface": "#9a9d9f",
+              "inverse-surface": "#0b0f10",
+              "primary-dim": "#0048c1",
+              "surface-container-high": "#e1e9ee",
+              "secondary": "#526074",
+              "outline-variant": "#a9b4b9",
+              "surface-bright": "#f7f9fb",
+              "tertiary-container": "#fa3d38",
+              "tertiary-dim": "#ab000f",
+              "on-tertiary-fixed": "#000000",
+              "on-primary-fixed-variant": "#0050d4",
+              "background": "#f7f9fb",
+              "primary": "#0053db",
+              "on-error-container": "#752121",
+              "secondary-dim": "#465468",
+              "on-secondary": "#f8f8ff",
+              "primary-fixed-dim": "#c7d3ff",
+              "on-secondary-fixed-variant": "#4e5c71",
+              "secondary-fixed": "#d5e3fc",
+              "surface-container-lowest": "#ffffff",
+              "surface": "#f7f9fb",
+              "error-container": "#fe8983",
+              "surface-container-low": "#f0f4f7",
+              "secondary-container": "#d5e3fc",
+              "surface-container": "#e8eff3",
+              "surface-tint": "#0053db",
+              "on-tertiary-container": "#000000",
+              "inverse-primary": "#618bff",
+              "tertiary-fixed": "#fa3d38",
+              "on-surface": "#2a3439",
+              "error-dim": "#4e0309",
+              "outline": "#717c82",
+              "on-background": "#2a3439",
+              "on-secondary-fixed": "#324053",
+              "error": "#9f403d",
+              "on-tertiary-fixed-variant": "#220001",
+              "primary-container": "#dbe1ff",
+              "on-surface-variant": "#566166",
+              "primary-fixed": "#dbe1ff"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-headline { font-family: 'Manrope', sans-serif; }
+        .tonal-carving { position: relative; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d9e4ea; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-background text-on-surface antialiased flex overflow-hidden">
+<!-- SideNavBar (Shared Component) -->
+<main class="flex-1 flex flex-col overflow-hidden">
+<!-- TopAppBar (Shared Component) -->
+<header class="fixed top-0 right-0 z-50 bg-white/80 backdrop-blur-xl shadow-sm h-16 px-8 flex justify-between items-center left-0">
+<div class="flex items-center gap-8">
+<h1 class="text-xl font-bold tracking-tight text-slate-900">RiskIntel Pro</h1>
+<nav class="hidden md:flex gap-6">
+<a class="text-slate-500 hover:text-slate-800 transition-colors text-sm font-medium" href="#">Dashboard</a>
+<a class="text-blue-600 border-b-2 border-blue-600 pb-1 text-sm font-medium" href="#">Assessments</a>
+<a class="text-slate-500 hover:text-slate-800 transition-colors text-sm font-medium" href="#">Reporting</a>
+<a class="text-slate-500 hover:text-slate-800 transition-colors text-sm font-medium" href="#">Frameworks</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative">
+<input class="bg-slate-100 border-none rounded-lg text-xs py-2 pl-8 pr-4 w-64 focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Search risks..." type="text"/>
+<span class="material-symbols-outlined absolute left-2 top-1.5 text-slate-400 text-lg" data-icon="search">search</span>
+</div>
+<button class="p-2 text-slate-500 hover:bg-slate-100 rounded-md transition-all">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-slate-500 hover:bg-slate-100 rounded-md transition-all">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-slate-200 overflow-hidden ml-2 ring-2 ring-slate-100">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="professional headshot of a data analyst in a modern office setting with soft natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCP87kDziKavWiEh1jksET-1Q2SNn3r-y__7bFqcE9-3tMk9dZLBrl2RguLb2NOwAyEKvMPw3RHGUnc_6DWa11eWgR0mjuGZfBP03H9CwirteyOLuSLMHzXjWMO_sLkQKM8FfOUVegeCtRKfnoV9KUxAHjqka8YWq_fIDISR5Ac1c1OhXs0QxbmkbFscvmiLkTYInhsJl5MWgRZjfaX4xp__xbfSwLRRFEYpMJ375vPSnBqTZi7VcSKoqHCa6pm7qDXHh2fPxribl0"/>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<div class="mt-16 flex-1 overflow-y-auto custom-scrollbar bg-surface px-8 pt-8 pb-12">
+<!-- AU Summary (Sticky) -->
+<section class="sticky top-0 z-40 bg-surface pt-2 pb-6">
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/10 shadow-sm flex justify-between items-end">
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<span class="text-[10px] font-bold text-primary uppercase tracking-widest px-2 py-0.5 bg-primary/5 rounded">Audit Unit</span>
+<h2 class="text-2xl font-headline font-extrabold text-on-surface">Global Treasury &amp; Liquidity Ops</h2>
+</div>
+<div class="flex gap-6 text-sm text-on-surface-variant font-medium">
+<span class="flex items-center gap-1.5"><span class="material-symbols-outlined text-lg" data-icon="fingerprint">fingerprint</span> AU-092-2024</span>
+<span class="flex items-center gap-1.5"><span class="material-symbols-outlined text-lg" data-icon="person">person</span> Lead: Marcus Sterling</span>
+<span class="flex items-center gap-1.5"><span class="material-symbols-outlined text-lg" data-icon="location_on">location_on</span> Zurich HQ</span>
+</div>
+</div>
+<div class="flex gap-3">
+<div class="text-right mr-4">
+<p class="text-[10px] uppercase font-bold text-on-surface-variant mb-1">Assessment Version</p>
+<select class="text-sm font-semibold border-slate-200 rounded-lg py-1.5 px-4 focus:ring-primary focus:border-primary">
+<option>v4.2 - Current (Oct 2023)</option>
+<option>v4.1 - Archive (Jul 2023)</option>
+<option>v3.9 - Archive (Jan 2023)</option>
+</select>
+</div>
+<button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-slate-800 transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-lg" data-icon="publish">publish</span> Submit
+                        </button>
+</div>
+</div>
+</section>
+<!-- Metric Sections (Sticky Row) -->
+<section class="sticky top-[138px] z-30 bg-surface grid grid-cols-4 gap-4 pb-8">
+<!-- AU Metrics -->
+<div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant/15">
+<p class="text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-3">AU Performance</p>
+<div class="flex items-center justify-between">
+<div>
+<span class="text-2xl font-headline font-bold text-on-surface">84.2</span>
+<span class="text-xs font-bold text-primary ml-1">+2.4%</span>
+</div>
+<div class="w-12 h-1 bg-surface-variant rounded-full relative overflow-hidden">
+<div class="absolute inset-0 bg-primary w-[84%]"></div>
+</div>
+</div>
+</div>
+<!-- Decision Metrics -->
+<div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant/15">
+<p class="text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-3">Global Decision Index</p>
+<div class="flex items-center justify-between">
+<div>
+<span class="text-2xl font-headline font-bold text-on-surface">61.0</span>
+<span class="text-xs font-bold text-tertiary ml-1">-0.8%</span>
+</div>
+<span class="material-symbols-outlined text-primary text-xl" data-icon="insights">insights</span>
+</div>
+</div>
+<!-- SpecDoc Inherent -->
+<div class="bg-secondary-container p-4 rounded-xl border border-blue-200/50">
+<p class="text-[10px] font-black text-on-secondary-container uppercase tracking-widest mb-3">Inherent Risk (SpecDoc)</p>
+<div class="flex items-center justify-between">
+<span class="text-2xl font-headline font-bold text-on-secondary-container">Medium</span>
+<div class="flex gap-0.5">
+<div class="w-2 h-4 bg-primary/20 rounded-sm"></div>
+<div class="w-2 h-4 bg-primary rounded-sm"></div>
+<div class="w-2 h-4 bg-primary/20 rounded-sm"></div>
+</div>
+</div>
+</div>
+<!-- SpecDoc Control -->
+<div class="bg-tertiary-container/10 p-4 rounded-xl border border-tertiary/10">
+<p class="text-[10px] font-black text-tertiary uppercase tracking-widest mb-3">Control Maturity</p>
+<div class="flex items-center justify-between">
+<span class="text-2xl font-headline font-bold text-tertiary">Strong</span>
+<div class="w-8 h-8 rounded-full border-2 border-tertiary border-t-transparent animate-spin-slow flex items-center justify-center">
+<div class="w-2 h-2 bg-tertiary rounded-full"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Hierarchical Risk List -->
+<div class="flex gap-8 relative">
+<!-- Left Side: Risks (70%) -->
+<div class="w-[70%] space-y-4">
+<!-- L1 Risk Category -->
+<div class="group">
+<div class="bg-surface-container p-4 rounded-xl flex items-center justify-between border-l-4 border-slate-900 mb-2">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-slate-500" data-icon="keyboard_arrow_down">keyboard_arrow_down</span>
+<div>
+<h3 class="font-headline font-bold text-on-surface">Financial Reporting &amp; Disclosures</h3>
+<p class="text-[10px] text-on-surface-variant font-medium">L1 - Category 01</p>
+</div>
+</div>
+<div class="flex items-center gap-8 pr-4">
+<div class="text-right">
+<p class="text-[10px] text-on-surface-variant font-bold uppercase mb-1">Aggregated Rating</p>
+<span class="bg-secondary-container text-on-secondary-container text-[10px] font-black px-3 py-1 rounded-full border border-blue-300">MEDIUM-HIGH</span>
+</div>
+<div class="w-32 h-2 bg-slate-200 rounded-full overflow-hidden">
+<div class="bg-tertiary-container w-[75%] h-full"></div>
+</div>
+</div>
+</div>
+<!-- L2 Risks -->
+<div class="pl-8 space-y-2">
+<!-- L2 Risk Row -->
+<div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/10 shadow-sm flex items-center gap-4 hover:border-primary/30 transition-all cursor-pointer">
+<div class="w-1.5 h-10 bg-tertiary rounded-full"></div>
+<div class="flex-1">
+<h4 class="text-sm font-bold text-on-surface">Accuracy of Cash Position Statements</h4>
+<p class="text-[11px] text-on-surface-variant">L2 - Risk 1.1.4</p>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex flex-col">
+<label class="text-[9px] font-black text-on-surface-variant uppercase mb-1">Rating</label>
+<select class="text-xs font-bold bg-tertiary-container/10 border-tertiary/20 text-tertiary rounded-lg py-1 pr-8 focus:ring-tertiary">
+<option>High</option>
+<option>Medium</option>
+<option>Low</option>
+</select>
+</div>
+<div class="flex flex-col flex-1 min-w-[200px]">
+<label class="text-[9px] font-black text-on-surface-variant uppercase mb-1">Rationale</label>
+<input class="text-xs border-none bg-surface-container-low rounded-lg py-1 px-3 focus:ring-1 focus:ring-primary" placeholder="Add comments..." type="text" value="Volatile exchange rates affecting end-of-day balances."/>
+</div>
+<button class="p-2 hover:bg-slate-100 rounded-lg">
+<span class="material-symbols-outlined text-slate-400" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/10 shadow-sm flex items-center gap-4 hover:border-primary/30 transition-all cursor-pointer">
+<div class="w-1.5 h-10 bg-secondary-container rounded-full"></div>
+<div class="flex-1">
+<h4 class="text-sm font-bold text-on-surface">Disclosure of Contingent Liabilities</h4>
+<p class="text-[11px] text-on-surface-variant">L2 - Risk 1.2.1</p>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex flex-col">
+<label class="text-[9px] font-black text-on-surface-variant uppercase mb-1">Rating</label>
+<select class="text-xs font-bold bg-secondary-container border-secondary/20 text-secondary rounded-lg py-1 pr-8 focus:ring-primary">
+<option>Low</option>
+<option>Medium</option>
+<option>High</option>
+</select>
+</div>
+<div class="flex flex-col flex-1 min-w-[200px]">
+<label class="text-[9px] font-black text-on-surface-variant uppercase mb-1">Rationale</label>
+<input class="text-xs border-none bg-surface-container-low rounded-lg py-1 px-3 focus:ring-1 focus:ring-primary" placeholder="Add comments..." type="text"/>
+</div>
+<button class="p-2 hover:bg-slate-100 rounded-lg">
+<span class="material-symbols-outlined text-slate-400" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- L1 Risk Category 02 -->
+<div class="group pt-4">
+<div class="bg-surface-container p-4 rounded-xl flex items-center justify-between border-l-4 border-slate-900 mb-2">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-slate-500" data-icon="keyboard_arrow_right">keyboard_arrow_right</span>
+<div>
+<h3 class="font-headline font-bold text-on-surface">Operational Process Resilience</h3>
+<p class="text-[10px] text-on-surface-variant font-medium">L1 - Category 02</p>
+</div>
+</div>
+<div class="flex items-center gap-8 pr-4">
+<div class="text-right">
+<p class="text-[10px] text-on-surface-variant font-bold uppercase mb-1">Aggregated Rating</p>
+<span class="bg-green-100 text-green-800 text-[10px] font-black px-3 py-1 rounded-full border border-green-200 uppercase">Satisfactory</span>
+</div>
+<div class="w-32 h-2 bg-slate-200 rounded-full overflow-hidden">
+<div class="bg-green-500 w-[30%] h-full"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- L1 Risk Category 03 -->
+<div class="group pt-4">
+<div class="bg-surface-container p-4 rounded-xl flex items-center justify-between border-l-4 border-slate-900 mb-2">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-slate-500" data-icon="keyboard_arrow_right">keyboard_arrow_right</span>
+<div>
+<h3 class="font-headline font-bold text-on-surface">Data Privacy &amp; Cybersecurity</h3>
+<p class="text-[10px] text-on-surface-variant font-medium">L1 - Category 03</p>
+</div>
+</div>
+<div class="flex items-center gap-8 pr-4">
+<div class="text-right">
+<p class="text-[10px] text-on-surface-variant font-bold uppercase mb-1">Aggregated Rating</p>
+<span class="bg-tertiary-container text-white text-[10px] font-black px-3 py-1 rounded-full border border-tertiary">CRITICAL</span>
+</div>
+<div class="w-32 h-2 bg-slate-200 rounded-full overflow-hidden">
+<div class="bg-tertiary w-[92%] h-full"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Side: Floating Draggable Panel (Overlay/Inspector) -->
+<div class="fixed top-24 right-8 w-80 h-[calc(100vh-140px)] z-[60]">
+<div class="bg-white/90 backdrop-blur-2xl border border-white h-full rounded-2xl shadow-2xl flex flex-col ring-1 ring-slate-900/5 overflow-hidden">
+<!-- Panel Header -->
+<div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white cursor-move">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-lg" data-icon="drag_indicator">drag_indicator</span>
+<h5 class="text-xs font-bold uppercase tracking-widest">Risk Inspector</h5>
+</div>
+<button class="hover:bg-white/20 p-1 rounded transition-all">
+<span class="material-symbols-outlined text-sm" data-icon="close">close</span>
+</button>
+</div>
+<!-- Panel Content -->
+<div class="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6">
+<!-- Selected Entity Context -->
+<div>
+<p class="text-[9px] font-black text-primary uppercase mb-1">Selected Risk</p>
+<p class="text-xs font-extrabold text-on-surface leading-snug">Accuracy of Cash Position Statements (L2-1.1.4)</p>
+</div>
+<hr class="border-slate-100"/>
+<!-- Metric Groups -->
+<div class="space-y-5">
+<!-- Group: AU Metrics -->
+<div>
+<div class="flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-sm text-slate-400" data-icon="business">business</span>
+<h6 class="text-[10px] font-black text-on-surface-variant uppercase tracking-wider">AU Impact Metrics</h6>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-xs p-2 bg-slate-50 rounded-lg">
+<span class="text-on-surface-variant">Asset Turnover</span>
+<span class="font-bold">1.4x</span>
+</div>
+<div class="flex justify-between text-xs p-2 bg-slate-50 rounded-lg">
+<span class="text-on-surface-variant">OpEx Ratio</span>
+<span class="font-bold">22.1%</span>
+</div>
+</div>
+</div>
+<!-- Group: Decision Metrics -->
+<div>
+<div class="flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-sm text-slate-400" data-icon="gavel">gavel</span>
+<h6 class="text-[10px] font-black text-on-surface-variant uppercase tracking-wider">Global Decision Data</h6>
+</div>
+<div class="bg-primary/5 p-3 rounded-xl border border-primary/10">
+<p class="text-[10px] text-primary font-bold mb-2">Regulatory Threshold</p>
+<div class="flex items-end justify-between">
+<span class="text-lg font-headline font-extrabold text-on-surface">98.5%</span>
+<span class="text-[9px] font-bold text-on-surface-variant uppercase">Target: 99%+</span>
+</div>
+</div>
+</div>
+<!-- Group: SpecDoc (Inherent + Control) -->
+<div>
+<div class="flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-sm text-slate-400" data-icon="description">description</span>
+<h6 class="text-[10px] font-black text-on-surface-variant uppercase tracking-wider">SpecDoc Evaluation</h6>
+</div>
+<div class="grid grid-cols-2 gap-2">
+<div class="p-2 border border-slate-100 rounded-lg">
+<p class="text-[8px] font-bold text-slate-400 uppercase">Inherent</p>
+<p class="text-xs font-bold text-tertiary">Critical</p>
+</div>
+<div class="p-2 border border-slate-100 rounded-lg">
+<p class="text-[8px] font-bold text-slate-400 uppercase">Control</p>
+<p class="text-xs font-bold text-green-600">Effective</p>
+</div>
+</div>
+</div>
+<!-- Group: Risk-specific -->
+<div>
+<div class="flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-sm text-slate-400" data-icon="warning">warning</span>
+<h6 class="text-[10px] font-black text-on-surface-variant uppercase tracking-wider">Risk-Specific Trend</h6>
+</div>
+<div class="h-16 w-full bg-slate-50 rounded-lg flex items-end justify-between px-2 pb-1 overflow-hidden relative">
+<div class="absolute inset-0 opacity-10 flex flex-col justify-between p-2">
+<div class="h-px bg-slate-900 w-full"></div>
+<div class="h-px bg-slate-900 w-full"></div>
+</div>
+<div class="w-3 bg-primary/20 h-4 rounded-t-sm"></div>
+<div class="w-3 bg-primary/20 h-6 rounded-t-sm"></div>
+<div class="w-3 bg-primary/20 h-5 rounded-t-sm"></div>
+<div class="w-3 bg-primary h-12 rounded-t-sm"></div>
+<div class="w-3 bg-primary/20 h-9 rounded-t-sm"></div>
+<div class="w-3 bg-primary/20 h-10 rounded-t-sm"></div>
+<div class="w-3 bg-primary h-14 rounded-t-sm"></div>
+</div>
+<p class="text-[10px] text-on-surface-variant mt-2 italic text-center">Historical variance (12 month window)</p>
+</div>
+</div>
+</div>
+<!-- Panel Footer -->
+<div class="p-4 bg-slate-50 border-t border-slate-100">
+<button class="w-full py-2 bg-white border border-slate-200 text-slate-900 rounded-lg text-xs font-bold hover:bg-slate-50 active:scale-95 transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="open_in_new">open_in_new</span> Full Analytics
+                            </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual FAB (Hidden on Dashboards per instruction, but added as primitive reference for specific views) -->
+<!-- Suppression logic applied: FAB is hidden -->
+</body></html>
