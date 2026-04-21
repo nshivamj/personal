@@ -1,5 +1,273 @@
 
-Perfect — now we’ll turn everything into a high-performance, production-style prompt so Claude builds it the right way from day 1.
+
+
+
+
+
+Per
+
+
+— now Perfect — this is much cleaner and exactly how you should start 👍
+You’re basically building:
+
+Flattened Data → Config → SQL → API Response
+
+No feature matrix, no evaluation, no what-if.
+Just live computation.
+
+⸻
+
+🧠 CLEAN BUILD PROMPT (Focused Version)
+
+Use this 👇 directly with any AI/dev tool.
+
+⸻
+
+:::writing{variant=“standard” id=“73921”}
+You are a senior backend engineer.
+
+Build a clean, minimal, production-ready Java Spring Boot service that computes dynamic metrics over a flattened dataset using configuration-driven SQL.
+
+⸻
+
+🎯 GOAL
+
+Create a backend service that:
+
+1. Assumes a flattened table already exists (or builds it)
+2. Stores metric definitions in a config table
+3. Dynamically generates SQL using these configs
+4. Executes aggregation queries
+5. Returns metrics via REST API (no persistence required)
+
+⸻
+
+🏗️ DATA MODEL
+
+1. Flattened Table
+
+Create table:
+
+issue_enriched_flat
+
+Columns:
+
+* issue_id (PK)
+* au_id
+* l2
+* severity (CRITICAL, HIGH, LOW)
+* status (OPEN, CLOSED)
+* impact (numeric)
+* validation_status
+* created_at (timestamp)
+
+(Optional but recommended):
+
+* is_critical (boolean)
+* is_open (boolean)
+
+⸻
+
+2. Metric Definition Table
+
+Create table:
+
+metric_definition
+
+Columns:
+
+* metric_id (PK)
+* dataset (string, e.g. issue_enriched_flat)
+* condition (SQL condition string)
+* label (string)
+* group_by (comma-separated or JSON array, e.g. “au_id,l2”)
+
+⸻
+
+Example Data
+
+* open_critical → “severity=‘CRITICAL’ AND status=‘OPEN’”
+* high_issues → “severity=‘HIGH’”
+* impact_gt_5m → “impact > 5000000”
+
+⸻
+
+⚙️ METRIC ENGINE
+
+Build a service:
+
+Responsibilities:
+
+1. Load metric definitions by dataset
+2. Group metrics by:
+    * dataset
+    * group_by fields
+3. Build ONE SQL query per group using:
+    COUNT(*) FILTER (WHERE ) AS metric_id
+4. Add GROUP BY clause using group_by fields
+
+⸻
+
+Example Generated SQL
+
+SELECT 
+  au_id,
+  COUNT(*) FILTER (WHERE severity='CRITICAL' AND status='OPEN') AS open_critical,
+  COUNT(*) FILTER (WHERE severity='HIGH') AS high_issues,
+  COUNT(*) FILTER (WHERE impact > 5000000) AS impact_gt_5m
+FROM issue_enriched_flat
+GROUP BY au_id;
+
+⸻
+
+🔌 API DESIGN
+
+Endpoint
+
+GET /metrics
+
+Query Params
+
+* dataset=issue_enriched_flat
+* groupBy=au_id (optional override)
+
+⸻
+
+Response Example
+
+[
+  {
+    "au_id": "AU1",
+    "open_critical": 5,
+    "high_issues": 10,
+    "impact_gt_5m": 2
+  },
+  {
+    "au_id": "AU2",
+    "open_critical": 2,
+    "high_issues": 6,
+    "impact_gt_5m": 1
+  }
+]
+
+⸻
+
+🛠️ IMPLEMENTATION DETAILS
+
+Tech Stack
+
+* Spring Boot
+* Spring JDBC Template (NOT Hibernate for queries)
+
+⸻
+
+Required Components
+
+1. MetricDefinition entity + repository (JPA ok)
+2. MetricService
+3. SQLBuilder class
+4. MetricsController
+
+⸻
+
+SQL Builder Logic
+
+* Build SELECT:
+    * group_by fields
+    * COUNT(*) FILTER (WHERE condition) AS metric_id
+* Build FROM:
+    * dataset
+* Build GROUP BY:
+    * group_by fields
+
+⸻
+
+⚠️ IMPORTANT RULES
+
+* DO NOT hardcode metrics
+* DO NOT use Hibernate for aggregation queries
+* DO NOT run one query per metric
+* DO use single query with multiple aggregations
+* DO reuse condition string directly in SQL
+
+⸻
+
+🚀 OPTIONAL
+
+* Add global filters (date range)
+* Add pagination later
+* Add drill-down later
+
+⸻
+
+📦 OUTPUT EXPECTATION
+
+Provide:
+
+* Full Spring Boot project structure
+* Entity + Repository
+* MetricService implementation
+* SQL builder logic (string-based is fine)
+* Controller with working API
+* Sample metric definitions
+* Sample SQL output
+
+⸻
+
+Focus on simplicity, performance, and extensibility.
+:::
+
+⸻
+
+🧠 What You Now Have
+
+This gives you:
+
+✔ dynamic metrics
+✔ single query execution
+✔ fast performance
+✔ clean architecture
+✔ easy to extend later
+
+⸻
+
+🔥 Why This Version is PERFECT
+
+* No over-engineering
+* No premature optimization
+* Fully flexible
+* Matches real OLAP systems
+
+⸻
+
+👉 Next Step (Recommended)
+
+After you build this:
+
+1. Add drill-down API
+2. Add UI panel config
+3. Add feature matrix (only if needed)
+
+⸻
+
+👉 If You Want
+
+I can now:
+
+* generate actual Spring Boot code files
+* give you SQL builder implementation
+* help you test with sample data
+* design React UI for this
+
+Just tell me 👍
+
+
+
+
+
+
+
+we’ll turn everything into a high-performance, production-style prompt so Claude builds it the right way from day 1.
 
 This prompt will force:
 	•	⚡ millisecond execution
