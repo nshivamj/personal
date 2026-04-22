@@ -1,7 +1,356 @@
 
 
 
+You are a senior full-stack engineer.
 
+I already have a working Spring Boot backend that:
+- computes metrics dynamically using SQL (JDBC Template)
+- evaluates derived metrics using a config JSON
+- exposes APIs like:
+  - POST /metrics
+  - GET /metrics
+  - POST /metrics/compute (preview)
+  - POST /evaluate
+  - POST /evaluate/scenario
+
+DO NOT modify backend logic.
+
+---
+
+# 🎯 GOAL
+
+Build a simple React + TypeScript frontend (Day 1 version) that:
+
+1. Lets me view and create metrics
+2. Lets me build evaluation config using JSON (no complex UI yet)
+3. Runs evaluation using config JSON
+4. Runs scenario comparison (base vs modified config)
+5. Displays results in a table
+
+IMPORTANT:
+- No graph UI
+- No drag-drop builder
+- No config persistence
+- JSON is the primary interface
+
+---
+
+# 🧠 CORE PRINCIPLE
+
+Evaluation = Compute Metrics + Apply Derived Logic
+
+Frontend must:
+- send config JSON directly to backend
+- backend handles everything
+
+---
+
+# 🖥️ FRONTEND TECH
+
+- React + TypeScript
+- AG Grid for tables
+- Minimal state management (useState or Zustand)
+- Optional: simple JSON editor (textarea is fine for now)
+
+---
+
+# 🧩 PAGES
+
+---
+
+## 1. Home Page
+
+Buttons:
+
+- Create Metric
+- View Metrics
+- Run Evaluation
+
+---
+
+## 2. Metric Builder Page
+
+Form fields:
+
+- metric_id (text)
+- dataset (dropdown or text)
+- condition (textarea)
+- aggregation (count / count_distinct)
+- group_by (comma-separated string)
+
+On submit:
+→ POST /metrics
+
+---
+
+## 3. Metrics List Page
+
+- Fetch from GET /metrics
+- Show in table
+
+Add button:
+[ Compute Metrics ]
+
+→ POST /metrics/compute
+
+Display result in AG Grid
+
+---
+
+## 4. Evaluation Page (MOST IMPORTANT)
+
+---
+
+### Layout
+
+Split screen:
+
+LEFT: Metrics list  
+RIGHT: JSON config editor  
+
+BOTTOM: Result table  
+
+---
+
+### JSON Editor
+
+Use textarea (simple for Day 1)
+
+Pre-fill example config:
+
+{
+  "metrics": [
+    {
+      "metric_id": "open_critical",
+      "dataset": "issue_enriched_flat",
+      "condition": "severity='CRITICAL' AND status='OPEN'",
+      "aggregation": "count",
+      "group_by": ["au_id"]
+    }
+  ],
+  "derived_metrics": [
+    {
+      "metric_id": "risk_score",
+      "type": "THRESHOLD",
+      "inputs": ["open_critical"],
+      "rules": [
+        { "min": 0, "max": 3, "value": "LOW" },
+        { "min": 4, "max": 7, "value": "MEDIUM" },
+        { "min": 8, "max": null, "value": "HIGH" }
+      ]
+    }
+  ]
+}
+
+---
+
+### Buttons
+
+[ Run Evaluation ]  
+[ Run Scenario ]
+
+---
+
+## 5. Evaluation Flow
+
+---
+
+### Run Evaluation
+
+Call:
+
+POST /evaluate
+
+Request:
+
+{
+  "config": { ...json from editor... }
+}
+
+---
+
+### Response
+
+Render in AG Grid:
+
+| AU | metric1 | metric2 | derived |
+
+---
+
+## 6. Scenario Mode
+
+---
+
+When user clicks "Run Scenario":
+
+Split JSON editor into two:
+
+LEFT: Base Config  
+RIGHT: Scenario Config  
+
+---
+
+### Call:
+
+POST /evaluate/scenario
+
+Request:
+
+{
+  "base_config": {...},
+  "scenario_config": {...}
+}
+
+---
+
+### Response
+
+{
+  "base": [...],
+  "scenario": [...],
+  "delta": [...]
+}
+
+---
+
+### UI
+
+Display table:
+
+| AU | Base Value | Scenario Value | Δ |
+
+Use indicators:
+
+- ↑ increase
+- ↓ decrease
+
+---
+
+# 🧩 CONFIG STRUCTURE (IMPORTANT)
+
+Support this JSON structure:
+
+---
+
+## Metrics
+
+{
+  "metric_id": "open_critical",
+  "dataset": "issue_enriched_flat",
+  "condition": "severity='CRITICAL' AND status='OPEN'",
+  "aggregation": "count",
+  "group_by": ["au_id"]
+}
+
+---
+
+## Derived Metrics Types
+
+---
+
+### SUM
+
+{
+  "metric_id": "total",
+  "type": "SUM",
+  "inputs": ["m1", "m2"]
+}
+
+---
+
+### AVG
+
+{
+  "metric_id": "avg",
+  "type": "AVG",
+  "inputs": ["m1", "m2"]
+}
+
+---
+
+### MAX
+
+{
+  "metric_id": "max",
+  "type": "MAX",
+  "inputs": ["m1", "m2"]
+}
+
+---
+
+### THRESHOLD
+
+{
+  "metric_id": "risk",
+  "type": "THRESHOLD",
+  "inputs": ["m1"],
+  "rules": [
+    { "min": 0, "max": 3, "value": "LOW" }
+  ]
+}
+
+---
+
+### MATRIX
+
+{
+  "metric_id": "risk_matrix",
+  "type": "MATRIX",
+  "inputs": ["m1", "m2"],
+  "rows": ["LOW", "HIGH"],
+  "columns": ["LOW", "MEDIUM", "HIGH"],
+  "values": [
+    ["LOW", "MEDIUM", "HIGH"],
+    ["MEDIUM", "HIGH", "CRITICAL"]
+  ]
+}
+
+---
+
+### MAPPING
+
+{
+  "metric_id": "mapped",
+  "type": "MAPPING",
+  "input": "risk",
+  "map": {
+    "LOW": "SAFE",
+    "HIGH": "RISKY"
+  }
+}
+
+---
+
+# ⚠️ IMPORTANT RULES
+
+- Do NOT persist config in backend
+- Config must live in UI state
+- Always pass config JSON to backend
+- Do NOT call compute separately before evaluate
+- Evaluation API already computes metrics
+
+---
+
+# 🚀 OUTPUT EXPECTATION
+
+Provide:
+
+- React project structure
+- Components:
+  - MetricForm
+  - MetricsTable
+  - JsonEditor
+  - EvaluationPage
+  - ScenarioView
+- API integration code
+- Working UI flow
+
+Focus on:
+- simplicity
+- correctness
+- fast iteration
+
+Styling can be basic
 
 
 Per
