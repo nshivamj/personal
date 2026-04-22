@@ -1,5 +1,312 @@
 
-You are a senior full-stack engineer.
+
+
+
+Y a se You are a senior full-stack engineer.
+
+I already have a working system that:
+- Computes metrics dynamically using SQL (Spring Boot + JDBC Template)
+- Evaluates derived metrics using configuration JSON
+- Supports scenario evaluation (base vs modified config)
+
+Now extend the system to support:
+1. Multiple metric sources (computed + precomputed)
+2. Multi-level metrics (AU, AU-L2)
+3. Aggregation and propagation between levels
+4. Clean UI support for all of the above
+
+DO NOT redesign the system. Extend it cleanly.
+
+---
+
+# 🧠 WHAT THIS SYSTEM DOES
+
+This is a configuration-driven analytics and evaluation engine.
+
+It behaves like:
+
+- SQL (for metric computation)
+- Excel (for formulas / derived logic)
+- What-if simulator (for scenarios)
+
+Everything is computed LIVE using config.
+
+---
+
+# 🧩 METRIC TYPES (IMPORTANT)
+
+We now have TWO types of metrics:
+
+---
+
+## 1. COMPUTED METRICS
+
+- Defined using SQL condition
+- Stored in metric_definition table
+- Example:
+  - open_critical = count where severity='CRITICAL'
+
+---
+
+## 2. PRECOMPUTED METRICS
+
+- Already stored in database
+- Metadata in: entity_type_metric
+- Values in: metric_value table
+
+Schema:
+
+metric_value:
+- au_id
+- l2_id
+- metric_code
+- value
+- as_of_date
+
+---
+
+# 🎯 REQUIREMENT
+
+UI and backend must treat both types uniformly.
+
+---
+
+# 🧠 METRIC DEFINITION EXTENSION
+
+Extend metric model:
+
+{
+  "metric_id": "mca_rating",
+  "source": "PRECOMPUTED",
+  "level": "AU"
+}
+
+{
+  "metric_id": "open_critical",
+  "source": "COMPUTED",
+  "level": "AU_L2"
+}
+
+---
+
+# ⚙️ BACKEND LOGIC
+
+---
+
+## Step 1: Load Metrics
+
+For each metric:
+
+IF source = COMPUTED:
+→ run SQL aggregation
+
+IF source = PRECOMPUTED:
+→ fetch from metric_value table
+
+---
+
+## Step 2: Normalize Data Structure
+
+All metrics should be stored as:
+
+Map<EntityKey, Map<MetricId, Value>>
+
+Where EntityKey:
+
+{
+  "au_id": "...",
+  "l2_id": "..." (nullable)
+}
+
+---
+
+# 🧠 MULTI-LEVEL PROBLEM
+
+Metrics exist at different levels:
+
+- AU level
+- AU-L2 level
+
+Derived metrics require same-level inputs.
+
+---
+
+# 🔥 SOLUTION: LEVEL TRANSFORMATIONS
+
+Add support for:
+
+---
+
+## 1. AGGREGATE (L2 → AU)
+
+Example:
+
+c_rating (AU-L2) → aggregate to AU
+
+Config:
+
+{
+  "metric_id": "c_rating_agg",
+  "type": "AGGREGATE",
+  "source_metric": "c_rating",
+  "from_level": "AU_L2",
+  "to_level": "AU",
+  "aggregation": "MAX"
+}
+
+---
+
+## 2. PROPAGATE (AU → L2)
+
+Example:
+
+mca_rating (AU) → copy to all L2
+
+Config:
+
+{
+  "metric_id": "mca_rating_expanded",
+  "type": "PROPAGATE",
+  "source_metric": "mca_rating",
+  "from_level": "AU",
+  "to_level": "AU_L2"
+}
+
+---
+
+# 🧠 EVALUATION FLOW
+
+---
+
+1. Load base metrics (computed + precomputed)
+2. Normalize into entity map
+3. Apply transformations:
+   - aggregate
+   - propagate
+4. Apply derived metrics:
+   - SUM / AVG / MAX
+   - THRESHOLD
+   - MATRIX
+   - MAPPING
+5. Return result
+
+---
+
+# 🧠 UI REQUIREMENTS
+
+---
+
+## 1. Metrics Section
+
+Show:
+
+- metric_id
+- source (Computed / Precomputed)
+- level (AU / AU-L2)
+
+Allow:
+- View metric definition
+- Edit computed metrics
+
+---
+
+## 2. Derived Metric Builder
+
+Add support for new types:
+
+- AGGREGATE
+- PROPAGATE
+
+---
+
+### Aggregate UI
+
+Fields:
+
+- source metric (dropdown)
+- from level (auto)
+- to level (dropdown)
+- aggregation type (SUM / MAX / AVG)
+
+---
+
+### Propagate UI
+
+Fields:
+
+- source metric
+- from level
+- to level
+
+---
+
+## 3. Config Builder
+
+UI should generate JSON automatically.
+
+No manual JSON editing.
+
+---
+
+## 4. Evaluation Page
+
+- run evaluation
+- show results
+
+---
+
+## 5. Scenario Page
+
+- base vs scenario config
+- show delta
+
+---
+
+# ⚠️ IMPORTANT RULES
+
+- Do NOT require dataset in config JSON
+- Metric definition should resolve dataset internally
+- Always align metric levels before evaluation
+- Use composite entity key (au_id + l2_id)
+- Do NOT allow mismatched levels in derived metrics
+
+---
+
+# 🚀 OUTPUT EXPECTATION
+
+Provide:
+
+- Updated backend logic for:
+  - multi-source metrics
+  - aggregation
+  - propagation
+- Updated config JSON schema
+- Updated UI components for:
+  - metric source display
+  - level display
+  - aggregate builder
+  - propagate builder
+- Working evaluation flow
+
+Focus on correctness, not styling.
+
+---
+
+# 🧠 FINAL GOAL
+
+Enable a system where:
+
+- metrics can come from multiple sources
+- metrics can exist at different levels
+- system can align them automatically
+- user can define logic visually
+- evaluation works seamlessly across levels
+
+
+
+
+
+full-stack engineer.
 
 I already have a working backend system (Spring Boot + JDBC Template) that:
 
