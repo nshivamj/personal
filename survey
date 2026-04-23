@@ -1,5 +1,230 @@
 
 
+You are a senior frontend engineer.
+
+Build an Analytics Page in React + TypeScript for a Risk Assessment system.
+
+---
+
+# 🧠 CONTEXT
+
+We already have a PRC Assessment container in the application that fetches and holds data.
+
+This data includes:
+
+1. fw_risk_assessment (base assessment data)
+2. fw_assessment_override (override data if present)
+
+Each record represents risk assessment at AU and L2 level.
+
+Sample structure:
+
+[
+  {
+    "au_id": "AU1",
+    "l2_id": "L2_1",
+    "risk": "R1",
+    "rating": "HIGH",
+    "override_rating": "MEDIUM" // optional
+  }
+]
+
+Final rating logic:
+
+- If override_rating exists → use override_rating
+- Else → use rating
+
+---
+
+# 🎯 GOAL
+
+Build an analytics page that:
+
+1. Uses existing data from PRC container (NO new API)
+2. Computes final rating
+3. Displays charts using Highcharts
+4. Shows full dataset in AG Grid
+5. Supports drill-down (AU → L2)
+
+---
+
+# 🧩 STEP 1: DATA SOURCE
+
+- Receive data as props OR via shared state from PRC container
+- Merge:
+  - fw_risk_assessment
+  - fw_assessment_override
+
+---
+
+## Final Dataset
+
+Transform into:
+
+[
+  {
+    "au_id": "AU1",
+    "l2_id": "L2_1",
+    "risk": "R1",
+    "final_rating": "MEDIUM"
+  }
+]
+
+---
+
+# 🧩 STEP 2: PAGE LAYOUT
+
+Top:
+- Summary cards
+
+Middle:
+- Charts (Highcharts)
+
+Bottom:
+- AG Grid (table + pivot enabled)
+
+---
+
+# 🧩 STEP 3: SUMMARY CARDS
+
+Show:
+
+- Total AUs
+- Total L2s
+- Count of HIGH ratings
+- Count of MEDIUM ratings
+- Count of LOW ratings
+
+---
+
+# 🧩 STEP 4: CHARTS (HIGHCHARTS)
+
+---
+
+## Chart 1: AU vs Rating Distribution (STACKED BAR)
+
+- X-axis → AU
+- Series → HIGH, MEDIUM, LOW
+- Value → count
+
+---
+
+## Chart 2: Overall Rating Distribution (PIE)
+
+- % of HIGH / MEDIUM / LOW
+
+---
+
+## Chart 3: L2 Distribution for Selected AU
+
+- Click on AU in Chart 1
+- Filter dataset
+- Show L2 breakdown
+
+---
+
+## Chart 4: Top Risky AUs
+
+- Sort by HIGH count
+- Show top 10
+
+---
+
+# 🧩 STEP 5: DRILL-DOWN
+
+- Clicking AU:
+  - updates Chart 3
+  - filters AG Grid
+
+---
+
+# 🧩 STEP 6: AG GRID
+
+Use AG Grid with:
+
+- sorting
+- filtering
+- grouping
+- pivot mode
+
+---
+
+## Grid Features:
+
+- Show full dataset
+- Columns:
+  - au_id
+  - l2_id
+  - risk
+  - final_rating
+
+---
+
+## Enable Pivot:
+
+- pivotMode = true
+- allow:
+  - group by AU
+  - group by L2
+  - pivot by final_rating
+  - aggregation (count)
+
+---
+
+# 🧩 STEP 7: DATA TRANSFORMATION
+
+Write helper functions:
+
+- mergeAssessmentData()
+- computeFinalRating()
+- groupByAUAndRating()
+- groupByRating()
+- groupByL2AndRating(selectedAU)
+
+---
+
+# 🧩 STEP 8: STATE
+
+Maintain:
+
+- dataset
+- selectedAU
+- derived data (memoized)
+
+---
+
+# 🧩 STEP 9: PERFORMANCE
+
+- Do NOT refetch data
+- Use memoization
+- Avoid recomputation
+
+---
+
+# ⚠️ IMPORTANT RULES
+
+- Do NOT create new APIs
+- Do NOT duplicate data source
+- Use existing PRC container data
+- Keep logic simple and readable
+
+---
+
+# 🚀 OUTPUT EXPECTATION
+
+Provide:
+
+- React components
+- Data transformation logic
+- Highcharts config
+- AG Grid setup
+- Drill-down interaction
+
+Focus on simplicity and correctness.
+
+
+
+
 
 
 Y a se You are a senior full-stack engineer.
