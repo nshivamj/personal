@@ -1,3 +1,328 @@
+
+Since you’re giving this to a Copilot (or another AI), I would provide business context, data model, constraints, objective, and expected solution, not just the algorithm. The better the context, the better the design you’ll get.
+
+⸻
+
+Plan Analyzer Recommendation Engine - Context & Design Prompt
+
+Background
+
+I am building an Audit Planning Analyzer that helps audit planners identify thematic audit opportunities from our enterprise audit taxonomy.
+
+The goal is not to optimize audit plans initially. Instead, the goal is to discover meaningful audit themes or coverage groups that planners can review.
+
+The system should be generic and configurable so that future business rule changes do not require algorithm changes.
+
+⸻
+
+Taxonomy
+
+Our taxonomy consists of the following hierarchy.
+
+Assessment Unit (AU)
+    ↓
+L2 Risk
+    ↓
+Process
+    ↓
+Process Instance
+    ↓
+Control
+    ↓
+Control Instance
+
+Each row in the dataset represents one valid implementation.
+
+Example:
+
+AU	L2 Risk	Process	Process Instance	Control	Control Instance
+
+A Control Instance is always implemented within a Process Instance.
+
+The same Control Instance may exist across multiple Assessment Units and Risks.
+
+⸻
+
+Current Capabilities
+
+The application already supports:
+
+* Filtering by any taxonomy dimension.
+* Dynamic Group By.
+* Drill-down across hierarchy.
+* Pivot API returning grouped counts.
+* Raw API returning filtered combinations.
+
+The explorer allows users to navigate the taxonomy.
+
+⸻
+
+Problem Statement
+
+Today users manually inspect data to identify opportunities for thematic audits.
+
+Instead, I want the system to automatically discover reusable implementation patterns and recommend potential audit themes.
+
+The recommendation engine should discover groups rather than optimize them.
+
+⸻
+
+Important Business Rules
+
+Rule 1
+
+Recommendations should not be based only on Control Instance reuse.
+
+Example:
+
+Process = Execute Payment
+Control Instance = CI101
+
+This alone is insufficient.
+
+⸻
+
+Rule 2
+
+Risk context must also match.
+
+Example
+
+GOOD
+
+Commodity
+Payment Risk
+Execute Payment
+CI101
+
+Treasury
+Payment Risk
+Execute Payment
+CI101
+
+These belong to the same recommendation group.
+
+BAD
+
+Commodity
+Payment Risk
+Execute Payment
+CI101
+
+Treasury
+Settlement Risk
+Execute Payment
+CI101
+
+These should NOT automatically belong to the same recommendation group because they mitigate different risks.
+
+Risk matching must be treated as a configurable validation rule.
+
+⸻
+
+Rule 3
+
+Coverage is determined by completeness.
+
+Example
+
+Commodity
+Payment Risk
+
+Required Processes
+
+* Execute Payment
+* Payment Instruction
+* Settlement
+
+If a recommendation only covers Execute Payment then coverage is
+
+1 / 3
+
+NOT 100%.
+
+Therefore every recommendation should calculate
+
+Covered Required Elements / Total Required Elements
+
+The required element should be configurable.
+
+Today it may be Processes.
+
+Tomorrow it may become Controls, Risks or Significant Activities.
+
+⸻
+
+Recommendation Philosophy
+
+The engine should discover reusable implementation groups.
+
+It should NOT evaluate every possible combination because that creates an exponential search space.
+
+Instead it should progressively expand themes only when they improve coverage.
+
+⸻
+
+Generic Recommendation Framework
+
+The recommendation engine should be metadata-driven.
+
+1. Discovery Strategy
+
+Defines what constitutes an atomic reusable implementation.
+
+Examples
+
+* Process + Control Instance
+* Process Instance + Control Instance
+* Control
+* Control Instance
+
+This should be configurable.
+
+⸻
+
+2. Validation Strategy
+
+Defines whether two records are allowed to belong to the same recommendation.
+
+Examples
+
+Mandatory
+
+* Same L2 Risk
+
+Optional
+
+* Same Division
+* Same Region
+* Same Risk Family
+
+Validation rules should be configurable.
+
+⸻
+
+3. Coverage Strategy
+
+Defines what “coverage” means.
+
+Examples
+
+Process Coverage
+
+Covered Processes
+/
+Required Processes
+
+Risk Coverage
+
+Covered Risks
+/
+Required Risks
+
+Control Coverage
+
+Covered Controls
+/
+Required Controls
+
+The engine should not hardcode Process Coverage.
+
+Coverage dimension must be configurable.
+
+⸻
+
+4. Merge Strategy
+
+Themes should only expand if adding another implementation group increases meaningful coverage.
+
+Example merge conditions
+
+* High AU overlap
+* High Risk overlap
+* High similarity
+* Increased coverage
+
+Merge rules should be configurable.
+
+⸻
+
+5. Ranking Strategy
+
+Recommendations should be ranked using configurable scoring.
+
+Example
+
+40% AU Coverage
+
+30% Risk Coverage
+
+20% Process Coverage
+
+10% Control Reuse
+
+The ranking formula should be configurable.
+
+⸻
+
+Algorithm
+
+The algorithm should approximately follow this flow.
+
+1. Read taxonomy rows.
+2. Build atomic implementation groups using the configured Discovery Strategy.
+3. Validate group members using configured Validation Rules.
+4. Build coverage maps for every business context (for example AU + Risk).
+5. Calculate coverage for each atomic group.
+6. Progressively expand groups only when coverage meaningfully increases.
+7. Stop expanding when no merge adds meaningful business value.
+8. Rank discovered themes.
+9. Return discovered recommendations.
+
+⸻
+
+Expected Output
+
+Each recommendation should contain
+
+* Recommendation Name
+* Discovery Key
+* Assessment Units Covered
+* Risks Covered
+* Processes Covered
+* Controls Covered
+* Control Instances Covered
+* Coverage Percentage
+* Local Reach
+* Global Reach
+* Similarity Score
+* Why this recommendation was created
+* Missing elements required for complete coverage
+* Ranking Score
+
+⸻
+
+Design Goal
+
+The solution should not be tied to the current audit methodology.
+
+The engine should support future changes simply by changing:
+
+* Discovery Strategy
+* Validation Strategy
+* Coverage Strategy
+* Merge Strategy
+* Ranking Strategy
+
+without changing the underlying algorithm.
+
+The recommendation engine should be generic enough to support different planning methodologies while remaining explainable and deterministic.
+
+I think this prompt gives a Copilot enough business context to design a flexible architecture rather than just generating code for a single algorithm. It clearly separates discovery, validation, coverage, merge, and ranking, which makes the solution adaptable as your audit planning methodology evolves.
+
+
+
+
 Heuristic Weighting
 
 🔹 Step 1: Define Base Weights
