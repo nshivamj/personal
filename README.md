@@ -1,4 +1,294 @@
 
+I think we should forget about “recommendations” for a minute and define the algorithm first. Once the algorithm is right, recommendations are just its output.
+
+From everything you’ve explained over the last few days, I think your algorithm is not an optimization algorithm. It’s a Coverage Group Discovery Algorithm.
+
+⸻
+
+Step 0 - Input
+
+Your input is your flattened taxonomy.
+
+AU	L2 Risk	Process	Process Instance	Control	Control Instance
+
+This is the only table the algorithm needs.
+
+⸻
+
+Step 1 - Build Implementation Groups
+
+Choose the reusable implementation key.
+
+I would use:
+
+(Process, Control Instance)
+
+Build a map like
+
+Execute Payment + CI101
+↓
+Commodity | Payment Risk
+Treasury | Payment Risk
+FX | Payment Risk
+
+Another
+
+Payment Instruction + CI205
+↓
+Commodity | Payment Risk
+Treasury | Payment Risk
+
+At this point you haven’t recommended anything.
+
+You’ve only discovered reusable implementations.
+
+⸻
+
+Step 2 - Build Coverage for every AU-Risk
+
+Now compute
+
+(AU,Risk)
+↓
+Required Processes
+
+Example
+
+Commodity
+Payment Risk
+Processes
+Execute Payment
+Payment Instruction
+Settlement
+
+Treasury
+
+Payment Risk
+Processes
+Execute Payment
+Payment Instruction
+
+Store this as a lookup.
+
+⸻
+
+Step 3 - Calculate Coverage Contribution
+
+Now take one implementation group.
+
+Example
+
+Execute Payment
+CI101
+
+It covers
+
+Commodity
+Treasury
+FX
+
+For every AU-Risk
+
+calculate
+
+Covered Processes
+/
+Required Processes
+
+Commodity
+
+1/3
+
+Treasury
+
+1/2
+
+FX
+
+1/1
+
+Now every implementation group has a contribution score.
+
+⸻
+
+Step 4 - Merge Related Groups
+
+Now check
+
+Execute Payment + CI101
+
+and
+
+Payment Instruction + CI205
+
+Do they repeatedly appear in the same AU-Risk combinations?
+
+If yes
+
+merge them.
+
+Now you have
+
+Payment Theme
+Processes
+Execute Payment
+Payment Instruction
+
+Coverage
+
+Commodity
+
+2/3
+
+Treasury
+
+2/2
+
+FX
+
+1/1
+
+⸻
+
+Step 5 - Keep Merging
+
+Now maybe
+
+Settlement
+
+also appears.
+
+Merge again.
+
+Now
+
+Commodity
+
+3/3
+
+Treasury
+
+2/2
+
+FX
+
+1/1
+
+Now you’ve discovered
+
+One audit theme
+
+⸻
+
+Step 6 - Rank
+
+Now rank themes by
+
+* Number of AUs
+* Number of Risks
+* Number of Projects
+* Coverage %
+* Number of Controls
+
+⸻
+
+The key realization
+
+Notice that nowhere did I say
+
+“Find the optimal solution.”
+
+Instead I said
+
+Discover reusable implementation groups and progressively merge them into larger themes.
+
+⸻
+
+Visually
+
+Fact Table
+↓
+Group by
+(Process + Control Instance)
+↓
+Coverage Groups
+↓
+Calculate Coverage
+↓
+Merge Similar Groups
+↓
+Audit Themes
+↓
+Rank
+↓
+Recommendations
+
+⸻
+
+Even better…
+
+I think there is one additional rule.
+
+Only merge two groups if they improve coverage.
+
+Example
+
+Theme A
+
+Commodity
+1/3
+
+Theme B
+
+Commodity
+2/3
+
+Merged
+
+Commodity
+3/3
+
+Excellent merge.
+
+But if merging adds no new AU-Risk coverage or no new processes, don’t merge them. That prevents creating huge, low-value themes.
+
+⸻
+
+I think this is the algorithm I’d implement in code
+
+1. Read all taxonomy rows.
+2. Group rows by (Process, ControlInstance).
+3. For each group:
+      Store all (AU, Risk) members.
+4. Build a lookup:
+      (AU, Risk) -> Required Processes.
+5. For each group:
+      Compute Process Coverage for every (AU, Risk).
+6. Compare groups.
+      If two groups frequently occur together
+      AND their union increases Process Coverage,
+      merge them into a new Theme.
+7. Repeat until no valuable merges remain.
+8. Rank Themes.
+9. Present Themes as recommendations.
+
+Why I think this fits your audit domain
+
+The important difference from a generic clustering algorithm is that your merge condition is business-aware.
+
+You don’t merge groups because they’re merely similar.
+
+You merge them because together they increase audit coverage for the same AU–Risk combinations.
+
+That means every recommendation naturally answers the question your planners care about:
+
+“If I audit this theme, how many AU–Risk combinations become fully or substantially covered?”
+
+I think that’s the algorithmic foundation your entire Plan Analyzer has been leading toward.
+
+
+
+
 Since you’re giving this to a Copilot (or another AI), I would provide business context, data model, constraints, objective, and expected solution, not just the algorithm. The better the context, the better the design you’ll get.
 
 ⸻
