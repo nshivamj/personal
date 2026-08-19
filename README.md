@@ -1,4 +1,142 @@
 
+
+WITH boundaries AS
+(
+    SELECT
+        eav.entity_node_id,
+        avbs.from_business_date AS business_date
+    FROM entity_attribute_value eav
+    JOIN attribute_value_business_state avbs
+        ON avbs.attribute_value_id = eav.attribute_value_id
+
+    UNION
+
+    SELECT
+        eav.entity_node_id,
+        avbs.to_business_date AS business_date
+    FROM entity_attribute_value eav
+    JOIN attribute_value_business_state avbs
+        ON avbs.attribute_value_id = eav.attribute_value_id
+    WHERE avbs.to_business_date IS NOT NULL
+),
+
+slices AS
+(
+    SELECT
+        entity_node_id,
+        business_date AS valid_from,
+
+        LEAD(business_date) OVER
+        (
+            PARTITION BY entity_node_id
+            ORDER BY business_date
+        ) AS valid_to
+
+    FROM boundaries
+),
+
+valid_values AS
+(
+    SELECT DISTINCT
+        s.entity_node_id,
+        s.valid_from,
+        s.valid_to,
+        at.attribute_name,
+        eav.attribute_value
+
+    FROM slices s
+
+    JOIN entity_attribute_value eav
+        ON eav.entity_node_id = s.entity_node_id
+
+    JOIN attribute_type at
+        ON at.attribute_type_id = eav.attribute_type_id
+
+    JOIN attribute_value_business_state avbs
+        ON avbs.attribute_value_id = eav.attribute_value_id
+
+    WHERE avbs.from_business_date <= s.valid_from
+      AND (
+            avbs.to_business_date IS NULL
+            OR avbs.to_business_date > s.valid_from
+          )
+),
+
+owners AS
+(
+    SELECT
+        entity_node_id,
+        valid_from,
+        valid_to,
+        attribute_value AS owner
+    FROM valid_values
+    WHERE attribute_name = 'Owner'
+),
+
+single_values AS
+(
+    SELECT
+        entity_node_id,
+        valid_from,
+        valid_to,
+
+        MAX(
+            CASE
+                WHEN attribute_name = 'Name'
+                THEN attribute_value
+            END
+        ) AS name,
+
+        MAX(
+            CASE
+                WHEN attribute_name = 'Description'
+                THEN attribute_value
+            END
+        ) AS description
+
+    FROM valid_values
+
+    WHERE attribute_name IN
+    (
+        'Name',
+        'Description'
+    )
+
+    GROUP BY
+        entity_node_id,
+        valid_from,
+        valid_to
+)
+
+SELECT
+    s.entity_node_id,
+    s.valid_from,
+    s.valid_to,
+    s.name,
+    s.description,
+    o.owner
+
+FROM single_values s
+
+LEFT JOIN owners o
+    ON  o.entity_node_id = s.entity_node_id
+    AND o.valid_from = s.valid_from
+    AND (
+        o.valid_to = s.valid_to
+        OR (
+            o.valid_to IS NULL
+            AND s.valid_to IS NULL
+        )
+    )
+
+ORDER BY
+    s.entity_node_id,
+    s.valid_from,
+    o.owner;
+
+
+
+
 I think we should forget about “recommendations” for a minute and define the algorithm first. Once the algorithm is right, recommendations are just its output.
 
 From everything you’ve explained over the last few days, I think your algorithm is not an optimization algorithm. It’s a Coverage Group Discovery Algorithm.
