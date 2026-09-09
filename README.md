@@ -1,6 +1,10 @@
 One thing he does really well is providing the right guidance while keeping the bigger picture in mind. He has a strong understanding of both the overall context and the technical details, and is able to step in at the right level when needed. I also really value the way he actively mentors and encourages me to push myself and upskill, including motivating me toward the Tech Fellow journey. His ability to guide, motivate, and use his network to get things moving is something he should continue doing.
 
 One thing I would recommend is to communicate the overall team vision and strategy more clearly and regularly. At times, we understand what needs to be done within our individual projects or applications, but it is not always clear how each of these pieces connect to the bigger picture and what we are collectively trying to achieve. Sharing that context more often would help the team understand the priorities better and see how our individual contributions are helping achieve the common goal.
+¯
 
+**What is one thing your manager does well and should keep doing?**
+Raj’s strong technical understanding and ability to quickly understand the bigger picture and leadership ask is a key strength. He is able to give the right advice and guide the team towards the right solution. He is also very approachable and invests time in mentoring people and supporting their growth. He should continue being someone the team can rely on for both technical guidance and honest advice.
 
-
+**One thing to recommend to your manager to be more effective:**
+I would recommend that Raj take more initiative in proactively reviewing what is happening across the project, identifying gaps or areas where the approach can be improved, and then architecting and advising on the right solution. He has the knowledge to spot things that others may miss, so being more aggressive in raising those points, following up, and making sure the right approach is being followed would help increase his overall impact and visibility.
