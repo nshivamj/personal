@@ -1,1423 +1,155 @@
+Akshay
 
+Areas of Strength:
+Akshay has done well in terms of technical and functional understanding, especially after picking up the reassessment features. He was able to quickly understand the existing code and complexity with minimal hand-holding, understand the requirements from the working group, and plan what needed to be done. He is also good in terms of execution and ownership — once a task is given, he takes it forward himself, reaches out to the right people or teams when there are dependencies, and makes sure it gets delivered. He was also able to work with his team members, assign tasks and drive them to completion, while managing his other commitments like audit work. He also keeps the leadership updated on the progress and any impediments on a timely basis, which helps in keeping everyone aligned and addressing issues early. Overall, he has shown that he can pick up complex areas quickly and drive things independently.
+Areas of Improvement:
+The main area I would like Akshay to improve is communication, especially around storytelling and understanding the audience. In some of the demos, when a specific question was asked, he would sometimes explain the overall process instead of directly answering what the person was looking for. I think he needs to get better at understanding the room and figuring out what information will actually help the person, even when the question is not very clearly articulated. Being more concise and directly answering the question first, and then providing additional context if needed, will help him communicate his work and the impact of what he is doing much more effectively.
 
 
+Devanshi
 
-**Areas of Strength — Technical/Functional Expertise, Teamwork, Operating Effectiveness**
+Strengths – Functional Expertise, Communication, Teamwork
+Devanshi has good context of the tasks that she owns and is able to understand the problem statement and requirements quickly. She is proactive in taking feedback on the approach she is following and confirming that we are aligned on what needs to be done. She is also approachable and flexible with ad hoc requirements and makes sure that the tasks are delivered within the expected timelines. For example, during the Alloy query/API changes, she was proactive in working through the findings and making the required changes. Her communication is also good, especially in terms of sharing the required information with the team.
+Areas of Improvement – Operating Effectiveness
+I feel Devanshi can improve by looking at the bigger picture of the things she owns and spending more time understanding how the solution will actually be used by the consumers. This will help her think beyond the immediate requirements and identify edge scenarios where the requirements being asked for may not be complete. For example, in the Alloy service, we later found that some information was not correct because active filters were not being considered. If she can proactively think about how different consumers might use the service and what scenarios they might come across, it can help identify such gaps earlier and also help her build stronger expertise in the areas she owns.
 
-Akshay has demonstrated strong technical and functional expertise, particularly in his work on the reassessment features, where he quickly understood the existing code complexity and requirements with minimal hand-holding. He is effective at translating requirements into an execution plan and proactively driving work to completion. He also collaborates well with team members by coordinating and distributing tasks effectively, while balancing multiple commitments such as audit-related work. His ability to independently navigate dependencies, seek the right inputs, and keep delivery moving demonstrates strong operating effectiveness and ownership.
 
-**Area of Improvement — Communication**
 
-Akshay’s key development area is communication, particularly in storytelling and tailoring his message to the audience. During demos and discussions, there have been instances where, when asked a specific question, he explained the broader process rather than directly addressing the information being sought. Going forward, he should focus on reading the room, identifying the underlying question or audience need, and providing a concise, targeted response before adding additional context. Strengthening this skill will help him articulate his work and impact more effectively and make his strong execution more visible to stakeholders.
 
+Harleen
 
+Areas of Strength — Operating Effectiveness, Communication, Functional Expertise:
+Harleen is quite good at staying on top of her tasks and making sure things get delivered and completed. As a project lead, she keeps track of what needs to be done, prioritizes things accordingly, and is proactive in reaching out to stakeholders to make sure requirements are clear and there is no confusion. She is also quick to adapt across different workstreams, whether it is audit strategies, capacity planning, dashboards, or working with the tech teams. She is direct and quite assertive about what she feels is the right way to move forward, which at times helps the team make decisions and keep things moving.
+Areas of Improvement — Functional Expertise, Judgment:
+One area I think Harlene can improve is building a better understanding of the technical capabilities and limitations of the systems she is working with. This would help her make better decisions around what should be part of MVP 1 versus MVP 2 and what is realistically possible within the given timeline and complexity. In some projects, such as audit strategies and data privacy, there were scenarios that were not thought through upfront and the tech team had to help identify and work through them. Going forward, thinking through the different scenarios earlier and being clearer on what is a must-have, good-to-have, or an actual blocker would help make discussions more focused and efficient. At times, discussions can become lengthy and involve multiple people, which takes up a significant amount of the team’s time. Being more thoughtful and aligned on the key questions, options, and decisions needed before the call would help lead to healthier and faster discussions, with less time spent trying to work through everything live on the call.
 
 
+Pratyusha
 
+Strengths
+Competencies: Technical, Operating Effectiveness, Teamwork
+Pruth has shown good technical and execution ownership, especially in handling complex scenarios and making sure the work is progressing as expected. She has been effective in working with the POs and tech team to explain scenarios, break down tasks, review the implementation, and make sure nothing is missed. She has also collaborated well with other tech leads, particularly around the PCAT work, and has been able to delegate and coordinate tasks effectively. Her ability to handle pressure, meet committed timelines, and work through technical challenges like the cache issues has been commendable.
 
+Areas of Improvement
+Competencies: Leadership, Judgment, Operating Effectiveness
+One area Pruth can focus on is escalating earlier when she is under pressure due to timelines or complexity, rather than trying to manage everything herself. She can also be more proactive in thinking about a generic and scalable solution upfront, so that some of the later complexities can be avoided or handled with less rework. As she continues to take on more ownership, being sharper on prioritization—understanding what is most critical for the leaders and the overall delivery—will help her manage competing priorities more effectively.
 
 
+Sennifer
 
+Areas of Strengths – Functional Expertise, Communication, Judgment
+Sam is good at understanding the overall problem and, once she has the context, she is able to articulate the full picture very clearly—what is needed, what is expected, and what is important for the project. She is also good at separating what is a must-have from what can be taken up as a Day 2 or good-to-have item, which helps the team prioritize and focus on what is needed to achieve the goal. As a Product Lead, she is also effective in working with stakeholders and keeping the discussion focused on what is being discussed, the key drivers, and the expected outcome.
+Areas of Improvement – Operating Effectiveness
+At times, since Sam is managing multiple things, it takes some time for her to get the complete context around a problem statement. The team sometimes needs to spend additional time explaining the background and what is happening before getting into the actual discussion. Getting the key context and background more quickly could help her get to the problem statement and prioritization faster, and make the overall discussions more efficient.
 
 
 
+Vaibhva
 
+Areas of Strengths – Technical, Leadership, Operating Effectiveness
+Vaib is technically very strong and is able to quickly understand the overall context and get into complex problem statements. He has worked on areas like agents and AI integration and has been able to come up with innovative solutions to achieve the task. He is also a strong manager who understands his team’s problems, gives them the right context, and is able to manage and follow up on multiple things efficiently to get them completed on time. This shows good growth both technically and as a leader.
+Areas of Improvement – Communication, Commercial Effectiveness
+One area where I think Vaib can improve is how he communicates and showcases the work being done. He is driving a lot of good work, but being more proactive in presenting the story and highlighting the impact of the work would help create better visibility. Another opportunity would be to identify more opportunities for his team members to present their work and get visibility across the organization, which would also help the team build their presence and confidence.
 
 
+Vishnu
+Strengths
+Technical
+Functional expertise
+Judgment
+Areas of development
+Operating effectiveness
+Communication
+Commercial effectiveness
 
+Areas of Strengths
+Vish is technically very strong and is able to understand complex problem statements and come up with effective solutions, especially around AI. He has also been innovative in solutioning and is open to feedback, for example, taking suggestions on how to structure the codebase and applying them effectively. He is also able to understand different solution approaches and use good judgment in deciding how to solve the problem.
+Areas of Improvement
+Vish can focus on implementing solutions faster and adapting more quickly when requirements change. He can also work on articulating the benefits of his design more clearly and showing the value through quick, practical examples. This will help stakeholders understand the impact of the solution faster and get quicker acceptance of the product.
 
 
 
 
+Ankit
+Strengths
+Technical / Functional Expertise
+Communication
+Teamwork
+Areas of Development
+Operating Effectiveness
+Leadership
+Judgment
 
+Strengths: Ankur has strong technical skills and is able to quickly understand and debug complex scenarios. He is not limited to just his assigned task and is able to understand the overall architecture, data model, and design and implement solutions around it. He is also approachable and easy to discuss problems or requirements with. His communication is another strength, as he is able to explain his points clearly and make even technical discussions easy to understand.
+Areas of improvement: Given his technical capabilities, I would like to see Ankur take on more complex and broader problem statements. He has the ability to think through different scenarios and come up with the right solution, so taking more ownership beyond individual tasks would help him increase his overall impact. I would also like to see him leverage his technical strengths more consistently by driving larger pieces of work end-to-end.
 
 
 
 
 
+Ayuushi
+Strengths
+Technical
+Functional Expertise
+Judgment
+Areas of Development
+Leadership
+Operating Effectiveness
+Communication
 
+Areas of Strength – Technical / Functional Expertise
+Ayu is technically good and once a task is given, she is able to quickly understand the problem statement and the complexity involved. She can work through the different scenarios independently and drive the implementation with limited guidance. During the assessment, she was able to take up the hydration and snapshot pieces and also quickly understand the EAV model. She is also receptive to feedback on the approach and is quick to implement the changes.
+Areas of Improvement – Leadership / Operating Effectiveness
+I would like Ayu to be more proactive in taking ownership beyond the tasks that are assigned to her. She can take a step back, understand what needs to be done overall, identify the missing scenarios, and drive things end-to-end instead of waiting for tasks to be given. For example, during the assessment, while she delivered well on the pieces she owned, I felt she could have taken more responsibility in driving the overall assessment, prioritizing what needed to be done, and taking the lead on the remaining areas. Given her technical capability, I believe she can take on this broader ownership.
 
 
-WITH boundaries AS
-(
-    SELECT
-        eav.entity_node_id,
-        avbs.from_business_date AS business_date
-    FROM entity_attribute_value eav
-    JOIN attribute_value_business_state avbs
-        ON avbs.attribute_value_id = eav.attribute_value_id
+Rejadeep
 
-    UNION
+Strengths
+Technical
+Functional expertise
+Operating effectiveness
+Areas of development
+Communication
+Leadership
+Teamwork
+Areas of Strengths:
+Raj is technically strong in the areas he owns and is able to independently deliver once the requirement is given. He thinks through different scenarios and has good technical understanding of the work. Once something is assigned to him, he takes it through to completion and is reliable in terms of execution.
+Areas of Improvement:
+The main area of improvement is being more proactive and looking beyond the task that is directly assigned. At times, he has the understanding but does not proactively call out what is missing, what other scenarios need to be considered, or what should be done next, and needs to be prompted on these. This was also seen during the audit studies, where he delivered on the assigned work but did not always surface the other gaps or considerations. He should make more effort to understand the full picture, communicate his thoughts and recommendations, take a more active role in reviews, and also share his knowledge with the junior team members.
 
-    SELECT
-        eav.entity_node_id,
-        avbs.to_business_date AS business_date
-    FROM entity_attribute_value eav
-    JOIN attribute_value_business_state avbs
-        ON avbs.attribute_value_id = eav.attribute_value_id
-    WHERE avbs.to_business_date IS NOT NULL
-),
 
-slices AS
-(
-    SELECT
-        entity_node_id,
-        business_date AS valid_from,
+Sai
 
-        LEAD(business_date) OVER
-        (
-            PARTITION BY entity_node_id
-            ORDER BY business_date
-        ) AS valid_to
+Strengths
+Operating Effectiveness, Teamwork
+Sai Manu is good at following through on the work assigned to him and takes ownership of the features he is working on. He is particularly good with testing and retesting scenarios, understanding edge cases, documenting properly, and working patiently with developers to get things right. He is also collaborative and makes sure the quality of the work is good before closing it out.
 
-    FROM boundaries
-),
+evelopment: Communication, Leadership, Judgment
+Sai Manu can improve by being more confident and vocal in discussions and by trying to understand the bigger picture rather than focusing only on what is specifically asked. He should ask more questions, think through the different scenarios and dependencies, and proactively come up with ideas or solutions instead of waiting for direction. This will help him take more ownership of the product areas he works on and drive things more independently.
 
-valid_values AS
-(
-    SELECT DISTINCT
-        s.entity_node_id,
-        s.valid_from,
-        s.valid_to,
-        at.attribute_name,
-        eav.attribute_value
 
-    FROM slices s
+Anushka
 
-    JOIN entity_attribute_value eav
-        ON eav.entity_node_id = s.entity_node_id
+Strengths
+Communication
+Operating effectiveness
+Teamwork
+Areas of development
+Technical
+Leadership
+Judgment
+Areas of Strengths
+Anu is proactive, adapts quickly, and takes the tasks assigned to her seriously. She does a good job of understanding the different scenarios and making sure the required coverage is addressed. She did a great job on the survey task as well, where she was able to work through the different scenarios once the task was assigned. Her communication is also good — she is vocal, asks the right questions, and is able to articulate her points clearly.
+Areas of Improvement
+I would like Anu to focus more on taking end-to-end ownership and driving things further on her own. As the pace of development has increased, this is a good opportunity for her to take more on her plate and learn faster. I would also like her to strengthen her technical capabilities through more hands-on implementation and by being more curious about how the overall system works and how her work fits into the bigger picture. This will help her become more confident in deciding the approach, require less guidance during reviews, and grow further technically.
 
-    JOIN attribute_type at
-        ON at.attribute_type_id = eav.attribute_type_id
 
-    JOIN attribute_value_business_state avbs
-        ON avbs.attribute_value_id = eav.attribute_value_id
 
-    WHERE avbs.from_business_date <= s.valid_from
-      AND (
-            avbs.to_business_date IS NULL
-            OR avbs.to_business_date > s.valid_from
-          )
-),
+Yatharth
 
-owners AS
-(
-    SELECT
-        entity_node_id,
-        valid_from,
-        valid_to,
-        attribute_value AS owner
-    FROM valid_values
-    WHERE attribute_name = 'Owner'
-),
-
-single_values AS
-(
-    SELECT
-        entity_node_id,
-        valid_from,
-        valid_to,
-
-        MAX(
-            CASE
-                WHEN attribute_name = 'Name'
-                THEN attribute_value
-            END
-        ) AS name,
-
-        MAX(
-            CASE
-                WHEN attribute_name = 'Description'
-                THEN attribute_value
-            END
-        ) AS description
-
-    FROM valid_values
-
-    WHERE attribute_name IN
-    (
-        'Name',
-        'Description'
-    )
-
-    GROUP BY
-        entity_node_id,
-        valid_from,
-        valid_to
-)
-
-SELECT
-    s.entity_node_id,
-    s.valid_from,
-    s.valid_to,
-    s.name,
-    s.description,
-    o.owner
-
-FROM single_values s
-
-LEFT JOIN owners o
-    ON  o.entity_node_id = s.entity_node_id
-    AND o.valid_from = s.valid_from
-    AND (
-        o.valid_to = s.valid_to
-        OR (
-            o.valid_to IS NULL
-            AND s.valid_to IS NULL
-        )
-    )
-
-ORDER BY
-    s.entity_node_id,
-    s.valid_from,
-    o.owner;
-
-
-
-
-I think we should forget about “recommendations” for a minute and define the algorithm first. Once the algorithm is right, recommendations are just its output.
-
-From everything you’ve explained over the last few days, I think your algorithm is not an optimization algorithm. It’s a Coverage Group Discovery Algorithm.
-
-⸻
-
-Step 0 - Input
-
-Your input is your flattened taxonomy.
-
-AU	L2 Risk	Process	Process Instance	Control	Control Instance
-
-This is the only table the algorithm needs.
-
-⸻
-
-Step 1 - Build Implementation Groups
-
-Choose the reusable implementation key.
-
-I would use:
-
-(Process, Control Instance)
-
-Build a map like
-
-Execute Payment + CI101
-↓
-Commodity | Payment Risk
-Treasury | Payment Risk
-FX | Payment Risk
-
-Another
-
-Payment Instruction + CI205
-↓
-Commodity | Payment Risk
-Treasury | Payment Risk
-
-At this point you haven’t recommended anything.
-
-You’ve only discovered reusable implementations.
-
-⸻
-
-Step 2 - Build Coverage for every AU-Risk
-
-Now compute
-
-(AU,Risk)
-↓
-Required Processes
-
-Example
-
-Commodity
-Payment Risk
-Processes
-Execute Payment
-Payment Instruction
-Settlement
-
-Treasury
-
-Payment Risk
-Processes
-Execute Payment
-Payment Instruction
-
-Store this as a lookup.
-
-⸻
-
-Step 3 - Calculate Coverage Contribution
-
-Now take one implementation group.
-
-Example
-
-Execute Payment
-CI101
-
-It covers
-
-Commodity
-Treasury
-FX
-
-For every AU-Risk
-
-calculate
-
-Covered Processes
-/
-Required Processes
-
-Commodity
-
-1/3
-
-Treasury
-
-1/2
-
-FX
-
-1/1
-
-Now every implementation group has a contribution score.
-
-⸻
-
-Step 4 - Merge Related Groups
-
-Now check
-
-Execute Payment + CI101
-
-and
-
-Payment Instruction + CI205
-
-Do they repeatedly appear in the same AU-Risk combinations?
-
-If yes
-
-merge them.
-
-Now you have
-
-Payment Theme
-Processes
-Execute Payment
-Payment Instruction
-
-Coverage
-
-Commodity
-
-2/3
-
-Treasury
-
-2/2
-
-FX
-
-1/1
-
-⸻
-
-Step 5 - Keep Merging
-
-Now maybe
-
-Settlement
-
-also appears.
-
-Merge again.
-
-Now
-
-Commodity
-
-3/3
-
-Treasury
-
-2/2
-
-FX
-
-1/1
-
-Now you’ve discovered
-
-One audit theme
-
-⸻
-
-Step 6 - Rank
-
-Now rank themes by
-
-* Number of AUs
-* Number of Risks
-* Number of Projects
-* Coverage %
-* Number of Controls
-
-⸻
-
-The key realization
-
-Notice that nowhere did I say
-
-“Find the optimal solution.”
-
-Instead I said
-
-Discover reusable implementation groups and progressively merge them into larger themes.
-
-⸻
-
-Visually
-
-Fact Table
-↓
-Group by
-(Process + Control Instance)
-↓
-Coverage Groups
-↓
-Calculate Coverage
-↓
-Merge Similar Groups
-↓
-Audit Themes
-↓
-Rank
-↓
-Recommendations
-
-⸻
-
-Even better…
-
-I think there is one additional rule.
-
-Only merge two groups if they improve coverage.
-
-Example
-
-Theme A
-
-Commodity
-1/3
-
-Theme B
-
-Commodity
-2/3
-
-Merged
-
-Commodity
-3/3
-
-Excellent merge.
-
-But if merging adds no new AU-Risk coverage or no new processes, don’t merge them. That prevents creating huge, low-value themes.
-
-⸻
-
-I think this is the algorithm I’d implement in code
-
-1. Read all taxonomy rows.
-2. Group rows by (Process, ControlInstance).
-3. For each group:
-      Store all (AU, Risk) members.
-4. Build a lookup:
-      (AU, Risk) -> Required Processes.
-5. For each group:
-      Compute Process Coverage for every (AU, Risk).
-6. Compare groups.
-      If two groups frequently occur together
-      AND their union increases Process Coverage,
-      merge them into a new Theme.
-7. Repeat until no valuable merges remain.
-8. Rank Themes.
-9. Present Themes as recommendations.
-
-Why I think this fits your audit domain
-
-The important difference from a generic clustering algorithm is that your merge condition is business-aware.
-
-You don’t merge groups because they’re merely similar.
-
-You merge them because together they increase audit coverage for the same AU–Risk combinations.
-
-That means every recommendation naturally answers the question your planners care about:
-
-“If I audit this theme, how many AU–Risk combinations become fully or substantially covered?”
-
-I think that’s the algorithmic foundation your entire Plan Analyzer has been leading toward.
-
-
-
-
-Since you’re giving this to a Copilot (or another AI), I would provide business context, data model, constraints, objective, and expected solution, not just the algorithm. The better the context, the better the design you’ll get.
-
-⸻
-
-Plan Analyzer Recommendation Engine - Context & Design Prompt
-
-Background
-
-I am building an Audit Planning Analyzer that helps audit planners identify thematic audit opportunities from our enterprise audit taxonomy.
-
-The goal is not to optimize audit plans initially. Instead, the goal is to discover meaningful audit themes or coverage groups that planners can review.
-
-The system should be generic and configurable so that future business rule changes do not require algorithm changes.
-
-⸻
-
-Taxonomy
-
-Our taxonomy consists of the following hierarchy.
-
-Assessment Unit (AU)
-    ↓
-L2 Risk
-    ↓
-Process
-    ↓
-Process Instance
-    ↓
-Control
-    ↓
-Control Instance
-
-Each row in the dataset represents one valid implementation.
-
-Example:
-
-AU	L2 Risk	Process	Process Instance	Control	Control Instance
-
-A Control Instance is always implemented within a Process Instance.
-
-The same Control Instance may exist across multiple Assessment Units and Risks.
-
-⸻
-
-Current Capabilities
-
-The application already supports:
-
-* Filtering by any taxonomy dimension.
-* Dynamic Group By.
-* Drill-down across hierarchy.
-* Pivot API returning grouped counts.
-* Raw API returning filtered combinations.
-
-The explorer allows users to navigate the taxonomy.
-
-⸻
-
-Problem Statement
-
-Today users manually inspect data to identify opportunities for thematic audits.
-
-Instead, I want the system to automatically discover reusable implementation patterns and recommend potential audit themes.
-
-The recommendation engine should discover groups rather than optimize them.
-
-⸻
-
-Important Business Rules
-
-Rule 1
-
-Recommendations should not be based only on Control Instance reuse.
-
-Example:
-
-Process = Execute Payment
-Control Instance = CI101
-
-This alone is insufficient.
-
-⸻
-
-Rule 2
-
-Risk context must also match.
-
-Example
-
-GOOD
-
-Commodity
-Payment Risk
-Execute Payment
-CI101
-
-Treasury
-Payment Risk
-Execute Payment
-CI101
-
-These belong to the same recommendation group.
-
-BAD
-
-Commodity
-Payment Risk
-Execute Payment
-CI101
-
-Treasury
-Settlement Risk
-Execute Payment
-CI101
-
-These should NOT automatically belong to the same recommendation group because they mitigate different risks.
-
-Risk matching must be treated as a configurable validation rule.
-
-⸻
-
-Rule 3
-
-Coverage is determined by completeness.
-
-Example
-
-Commodity
-Payment Risk
-
-Required Processes
-
-* Execute Payment
-* Payment Instruction
-* Settlement
-
-If a recommendation only covers Execute Payment then coverage is
-
-1 / 3
-
-NOT 100%.
-
-Therefore every recommendation should calculate
-
-Covered Required Elements / Total Required Elements
-
-The required element should be configurable.
-
-Today it may be Processes.
-
-Tomorrow it may become Controls, Risks or Significant Activities.
-
-⸻
-
-Recommendation Philosophy
-
-The engine should discover reusable implementation groups.
-
-It should NOT evaluate every possible combination because that creates an exponential search space.
-
-Instead it should progressively expand themes only when they improve coverage.
-
-⸻
-
-Generic Recommendation Framework
-
-The recommendation engine should be metadata-driven.
-
-1. Discovery Strategy
-
-Defines what constitutes an atomic reusable implementation.
-
-Examples
-
-* Process + Control Instance
-* Process Instance + Control Instance
-* Control
-* Control Instance
-
-This should be configurable.
-
-⸻
-
-2. Validation Strategy
-
-Defines whether two records are allowed to belong to the same recommendation.
-
-Examples
-
-Mandatory
-
-* Same L2 Risk
-
-Optional
-
-* Same Division
-* Same Region
-* Same Risk Family
-
-Validation rules should be configurable.
-
-⸻
-
-3. Coverage Strategy
-
-Defines what “coverage” means.
-
-Examples
-
-Process Coverage
-
-Covered Processes
-/
-Required Processes
-
-Risk Coverage
-
-Covered Risks
-/
-Required Risks
-
-Control Coverage
-
-Covered Controls
-/
-Required Controls
-
-The engine should not hardcode Process Coverage.
-
-Coverage dimension must be configurable.
-
-⸻
-
-4. Merge Strategy
-
-Themes should only expand if adding another implementation group increases meaningful coverage.
-
-Example merge conditions
-
-* High AU overlap
-* High Risk overlap
-* High similarity
-* Increased coverage
-
-Merge rules should be configurable.
-
-⸻
-
-5. Ranking Strategy
-
-Recommendations should be ranked using configurable scoring.
-
-Example
-
-40% AU Coverage
-
-30% Risk Coverage
-
-20% Process Coverage
-
-10% Control Reuse
-
-The ranking formula should be configurable.
-
-⸻
-
-Algorithm
-
-The algorithm should approximately follow this flow.
-
-1. Read taxonomy rows.
-2. Build atomic implementation groups using the configured Discovery Strategy.
-3. Validate group members using configured Validation Rules.
-4. Build coverage maps for every business context (for example AU + Risk).
-5. Calculate coverage for each atomic group.
-6. Progressively expand groups only when coverage meaningfully increases.
-7. Stop expanding when no merge adds meaningful business value.
-8. Rank discovered themes.
-9. Return discovered recommendations.
-
-⸻
-
-Expected Output
-
-Each recommendation should contain
-
-* Recommendation Name
-* Discovery Key
-* Assessment Units Covered
-* Risks Covered
-* Processes Covered
-* Controls Covered
-* Control Instances Covered
-* Coverage Percentage
-* Local Reach
-* Global Reach
-* Similarity Score
-* Why this recommendation was created
-* Missing elements required for complete coverage
-* Ranking Score
-
-⸻
-
-Design Goal
-
-The solution should not be tied to the current audit methodology.
-
-The engine should support future changes simply by changing:
-
-* Discovery Strategy
-* Validation Strategy
-* Coverage Strategy
-* Merge Strategy
-* Ranking Strategy
-
-without changing the underlying algorithm.
-
-The recommendation engine should be generic enough to support different planning methodologies while remaining explainable and deterministic.
-
-I think this prompt gives a Copilot enough business context to design a flexible architecture rather than just generating code for a single algorithm. It clearly separates discovery, validation, coverage, merge, and ranking, which makes the solution adaptable as your audit planning methodology evolves.
-
-
-
-
-Heuristic Weighting
-
-🔹 Step 1: Define Base Weights
-Let’s say you assign default weights for categories (summing to 100%):
-Code Generation → 50%
-
-
-Code Quality → 25%
-
-
-Code Improvement → 15%
-
-
-Code Understanding → 10%
-
-
-
-🔹 Step 2: Normalize Weights for Selected Categories
-When fewer categories are tagged, you re-normalize only among those selected.
-👉 Example 1: If a ticket is tagged with [Code Generation, Quality]:
-From base weights → Gen = 50, Quality = 25.
-
-
-Total = 75.
-
-
-Normalize:
-
-
-Gen = 50/75 = 66.7%
-
-
-Quality = 25/75 = 33.3%
-
-
-So if story points = 10, reduction = 25% (2.5 SP saved):
-Gen gets 1.67 SP saved.
-
-
-Quality gets 0.83 SP saved.
-
-
-
-👉 Example 2: If a ticket is tagged with [Improvement, Understanding]:
-Base = 15 + 10 = 25.
-
-
-Normalize:
-
-
-Improvement = 15/25 = 60%
-
-
-Understanding = 10/25 = 40%
-
-
-If story points = 8, reduction = 15% (1.2 SP saved):
-Improvement = 0.72 SP.
-
-
-Understanding = 0.48 SP.
-
-
-
-👉 Example 3: If all 4 categories are selected → just use base weights as-is.
-
-🔹 Step 3: Implementation Formula
-If SavedPoints = StoryPoints × Reduction%
-For each category:
-CategorySavedSP = SavedPoints × (CategoryWeight / SumOfSelectedCategoryWeights)
-
-
-✅ This way:
-You avoid equal splits.
-
-
-You bias attribution to categories that you believe drive more time savings.
-
-
-You keep results consistent and defensible.
-
-
-Copilot Adoption & Efficiency Insights Report
-
-
-1. Adoption by Copilot Category
-What it tells us:
- Distribution of usage across categories like code generation, refactoring, documentation, boilerplate, etc.
-
-
-Insights:
-
-
-Heavy skew towards certain categories (e.g., boilerplate) suggests untapped potential in advanced areas (e.g., refactoring, test generation).
-
-
-Some categories may be underutilized simply because devs don’t know they exist.
-
-
-Next steps:
-
-
-Provide category-focused training (e.g., “how to use Copilot for test cases”).
-
-
-Create prompt libraries/templates for underused categories.
-
-
-Encourage developers to experiment with multiple categories.
-
-
-Efficiency Mapping:
- Expanding adoption from low-value categories (boilerplate) to high-value ones (test generation/refactoring) increases time savings per ticket.
-
-
-
-3. Copilot Category vs. Time Reduced Category
-What it tells us:
- Shows which Copilot categories correlate with significant vs. moderate vs. slight time savings.
-
-
-Insights:
-
-
-Code generation may consistently drive “significant” savings.
-
-
-Documentation may be in “slightly reduced” → shows diminishing returns.
-
-
-Some categories may show inconsistent gains → needs further study.
-
-
-Next steps:
-
-
-Prioritize expanding use of categories with high impact correlation (e.g., code generation, test generation).
-
-
-Reduce reliance on categories with low impact (e.g., documentation).
-
-
-Track how categories shift over time with training.
-
-
-Efficiency Mapping:
- Shifting work towards high-impact categories maximizes efficiency per usage hour.
-
-
-
-4. Split Across Time Reduced Category (Significant, Moderate, Slight, Not Feasible)
-What it tells us:
- Shows distribution of tickets by level of time saved.
-
-
-Insights:
-
-
-If many tickets are “slight” → Copilot is being under-leveraged.
-
-
-If large % are “not feasible” → Copilot applicability may be low or devs aren’t framing prompts correctly.
-
-
-Next steps:
-
-
-Investigate why “not feasible” tickets exist (domain complexity, poor prompting, setup issues).
-
-
-Share prompting best practices to move “slight” → “moderate/significant”.
-
-
-Track feasibility % per quarter to measure maturity.
-
-
-Efficiency Mapping:
- Increasing share of “significant” time savings tickets → exponential impact on total efficiency gain.
-
-
-
-5. Ticket Size vs. Copilot Category Count
-What it tells us:
- Shows if Copilot is being used more on small, medium, or large tickets, and in how many categories.
-
-
-Insights:
-
-
-If adoption is skewed towards small tickets → missing efficiency in large/complex tickets.
-
-
-If larger tickets use multiple categories → shows Copilot’s compound benefits.
-
-
-Next steps:
-
-
-Encourage Copilot use in medium/large tickets where returns are higher.
-
-
-Build guidelines: “Use at least 2 categories (gen + test) for large tickets.”
-
-
-Measure efficiency per story point bucket.
-
-
-Efficiency Mapping:
- Shifting Copilot from small → large tickets increases weighted efficiency gains.
-
-
-
-6. Total Efficiency Gain
-What it tells us:
- Aggregated productivity improvement from Copilot.
-
-
-Insights:
-
-
-Quantifies ROI of adoption so far.
-
-
-Trend over time shows whether efficiency is compounding or stagnating.
-
-
-Next steps:
-
-
-Establish a baseline benchmark (e.g., 20% gain).
-
-
-Track monthly/quarterly growth.
-
-
-Set target efficiency goals for leadership visibility.
-
-
-Efficiency Mapping:
- Direct measure of ROI → ties adoption strategy to tangible outcomes.
-
-
-
-7. Efficiency by Copilot Usage Category
-What it tells us:
- Shows which categories drive the most efficiency.
-
-
-Insights:
-
-
-Code generation/test automation often leads in efficiency.
-
-
-Some categories may have low adoption + low efficiency → candidates for deprioritization.
-
-
-Next steps:
-
-
-Focus enablement on categories with high efficiency + medium adoption (growth potential).
-
-
-Evaluate whether to sunset or de-prioritize low adoption/low efficiency ones.
-
-
-Efficiency Mapping:
- Better allocation of developer time across categories → maximized ROI.
-
-
-
-8. Efficiency by Story Point
-What it tells us:
- Maps Copilot impact against ticket size (e.g., 1SP, 3SP, 5SP, 8SP).
-
-
-Insights:
-
-
-Small tickets may show marginal benefit → Copilot more valuable in 5SP+ tickets.
-
-
-Large story points could demonstrate compounding savings.
-
-
-Next steps:
-
-
-Prioritize Copilot use on medium-to-large tickets.
-
-
-Create guidelines: “Copilot is mandatory for 5SP+ stories.”
-
-
-Efficiency Mapping:
- Focus on story-point weighted efficiency to drive bigger ROI.
-
-
-
-9. Efficiency by Ticket Size
-What it tells us:
- Direct comparison of efficiency vs. ticket size.
-
-
-Insights:
-
-
-Efficiency % may plateau beyond a certain ticket size → diminishing returns.
-
-
-High adoption in small tickets but low efficiency → wasted effort.
-
-
-Next steps:
-
-
-Encourage balanced adoption (not just small tickets).
-
-
-Study where Copilot doesn’t scale well (very large tickets) → supplement with other techniques.
-
-
-Efficiency Mapping:
- Aligning Copilot use to optimal ticket size range boosts aggregate ROI.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Copilot Adoption & Efficiency — 
-Executive summary
-Adoption is high (68%), and overall efficiency gain is ~7% at the app level.
-Biggest ROI categories: Code Improvement (8%) and Code Generation (7%).
-By size: Medium & large tickets deliver ~7% efficiency; small tickets lag at ~5%.
-Where time savings land today: Mostly slight/moderate reductions; “significant” is only ~7% of issues.
-What the data tells us (with takeaways)
-1) Adoption by App
-Used: 541 (68%) Not used: 267 (32%).
-So what: Copilot is embedded in day-to-day flow, but 1 in 3 issues still don’t use it.
-Next step: Run a quick scan of “not used” issues to separate not applicable vs missed opportunity and target the latter with prompts/examples.
-2) Adoption by Category
-Share of issues: Improvement 29% > Generation 26% > Quality 24% > Understanding 20%.
-So what: Team relies most on Improvement/Generation—the same areas with strongest ROI (see next section).
-Next step: Double-down enablement and prompt packs for Improvement & Generation; encourage secondary use (e.g., add Testing/Quality asks after generation).
-3) Efficiency by Category (story-point weighted)
-Improvement: 8% Generation: 7% Quality: 4% Understanding: 4%.
-So what: Copilot pays off most when writing or upgrading code; returns are lower for quality/understanding-only tasks.
-Next step:
-Make Improvement and Generation the “default Copilot lanes” for engineers.
-For Quality/Understanding, supplement with structured checklists or automated review bots to convert “no reduction” cases into “slight/moderate”.
-4) Efficiency by Story Points
-Peaks: 13-point stories 11%, and 5/8-point stories 8%.
-Low impact: 1–3 SP 5–6%; 6 SP and 30 SP currently 0%.
-So what: Mid-sized stories are the Copilot sweet spot. Very small tasks are already fast; very large tasks need better decomposition/context.
-Next step: Encourage splitting large stories; set an expectation that 5–13 SP stories use Copilot with multi-category prompts (gen + improve + tests).
-5) Efficiency by Ticket Size (aggregated)
-Medium: 7%, Large: 7%, Small: 5% (by story-point weighting).
-So what: Despite higher adoption on larger work, small tickets underperform on ROI; medium/large can do even better with better prompts/context.
-Next step: Provide prompt recipes for medium/large tickets (e.g., “generate + refactor + create tests”) and skip low-value Copilot usage on trivial small tickets.
-6) Adoption × Time-reduction mix
-Counts: Not used 264, Significant 56, Moderate 96, Slight 322, No reduction 67.
- (That’s ~7% significant, 12% moderate, 40% slight, 8% no reduction, 32% not used.)
-So what: Most Copilot-used issues land in slight/moderate buckets; significant is rare.
-Next step (high-leverage): Move slices of slight → moderate and moderate → significant with better prompting & context injection.
-7) Usage by Ticket Size × Category (shares within each size)
-Small: “Not applicable” 35% (i.e., many small issues skip Copilot).
-Medium: balanced use across categories (17–24%).
-Large: lowest “not applicable” (9%); Improvement dominates (39%).
-So what: Engineers already reach for Copilot on larger work—good—but we’re leaving easy wins on the table in small tickets where generation + tests can be quick wins.
-Next step: Where small tickets are repetitive (CRUD, stubs, tests), ship one-click prompt templates so devs get “instant” value.
-
-
-Targeted actions (mapped to efficiency lift)
-Scale the winners (Generation & Improvement)
-
-
-Action: Publish 6–8 prompt recipes (new module scaffolding, API handler + tests, refactor for readability/perf, migration fixups).
-
-
-Expected lift: even a 10% conversion of “slight” → “moderate” within used issues adds ~0.6 pp to average time saved among Copilot-used issues (and ~0.4 pp across all issues).
- If “slight” → “significant” for the same 10%, the lift is ~1.2 pp (used) / 0.8 pp (all).
-
-
-Decompose large/30-SP stories
-
-
-Action: Policy: break 30-SP stories into 5–13 SP sub-stories (where your data peaks at 8–11% gains).
-
-
-Expected lift: converts zero-gain 30-SP work into 8–11% territory.
-
-
-Raise the floor for small tickets
-
-
-Action: For repetitive small tickets, standardize “gen + tests” micro-prompts (one launcher per repo).
-Expected lift: moving small from 5% → 6–7% can matter because they’re numerous; this also frees attention for bigger tasks.
-
-
-Fix the bimodal “Quality” category
-
-
-Your time distribution shows Quality has 31% significant and 31% no reduction—i.e., inconsistent ROI.
-Action: Add guardrails (lint/fix prompts, static-analysis summaries, PR review checklists) so quality tasks don’t fall to “no reduction”.
-Expected lift: converting just 10% of “no reduction” quality issues to slight adds measurable points.
-
-
-Shrink the “not used” pool with intent
-
-
-Action: For the 32% not used, only target the applicable subset (e.g., bugs, refactors, new endpoints).
-Expected lift: converting 10% of “not used” to moderate (15%) adds roughly +0.48 pp to average time saved across all issues.
-What to track next (to prove the lift)
-Adoption × Impact funnel: % Used → % Significant/Moderate/Slight (trend by sprint).
-Category ROI: Efficiency by category and by multi-category usage on a ticket.
-Size ROI: Efficiency by SP buckets (1,2,3,5,8,13,30) and ticket size (small/medium/large).
-“What-if” scorecard: Show the effect of shifting portions of slight → moderate and not used → moderate each sprint (using the 25/15/5% rubric).
-TL;DR leadership message
-We’re at 68% adoption and ~7% efficiency overall.
-Concentrate on Code Improvement & Generation and mid-sized stories to move efficiency fastest.
-Apply prompt packs, ticket decomposition, and QA guardrails to lift “slight” to “moderate/significant.”
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-🔹 1. Internal Codebase Complexity & Libraries
-Challenge: Copilot works best with well-known open-source patterns, but enterprise teams often use custom internal libraries, frameworks, or DSLs. Since Copilot has less context on these, suggestions are weaker.
-
-
-Efficiency Impact:
-Developers spend time rejecting/refactoring irrelevant Copilot code.
-Gains from repetitive/common UI or service layer code are low because internal frameworks differ.
-
-
-👉 Next Step: Fine-tune Copilot on internal codebase or build prompt templates (e.g., “Write controller using our BaseController pattern”) to help Copilot adapt.
-
-🔹 3. Lack of Standardization in Coding Practices
-Challenge: If teams don’t have consistent coding guidelines or architecture patterns, Copilot produces inconsistent code.
-
-
-Efficiency Impact:
-More review cycles needed → productivity drops.
-Junior engineers might rely too much, producing inconsistent PRs.
-👉 Next Step: Establish strong code standards + enforce via linters/PR checks, so Copilot outputs are aligned.🔹 4. Context Switching & Limited History
-Challenge: Copilot does not always understand Jira ticket context, design docs, or commit history.
-Efficiency Impact:
-Developers spend time “re-explaining” context inside comments.
-Suggestions miss business logic (e.g., “validation must match product rules”).
-👉 Next Step: Connect Jira + GitLab metadata into Copilot (through plugins/extensions), so AI suggestions are contextual.
-🔹 5. Legacy Code & Monolithic Systems
-Challenge: Enterprises often have legacy monoliths with outdated patterns. Copilot is better with modern modular code.
-
-
-Efficiency Impact:
-Developers spend more time fixing/refactoring AI output than writing directly.
-Gains are seen only in greenfield or microservice areas, not old modules.
-👉 Next Step: Prioritize Copilot adoption on new projects/microservices first.
-🔹 7. Developer Mindset & Adoption Curve
-Challenge: Senior devs may resist Copilot (“I code faster without it”), juniors may over-rely.
-
-
-Efficiency Impact:
-Uneven adoption → partial team gains.
-Net productivity impact gets diluted.
-
-
-👉 Next Step: Run structured adoption pilots + share internal success stories (ex: “UI tickets reduced by 30% dev time with Copilot”).
-
-✅ Efficiency-Specific Pain Points (Summary)
-Internal libraries not understood by Copilot → low gains.
-No Jira/GitLab context integration → Copilot lacks business logic awareness.
-Legacy code lowers suggestion quality → slows adoption.
-ROI not measured → leadership skeptical.
-Security/IP concerns → restrict usage.
-
-“Our biggest blockers to efficiency are: Copilot not learning our internal libraries, lack of Jira/GitLab context, and limited adoption in legacy systems. If we fix these, efficiency gains could scale 2–3x beyond current levels.”
-
-
-
-
-Here’s a structured table version:
-
-📊 Copilot Adoption & Efficiency Insights
-Section
-What it Tells Us
-Insights
-Next Steps
-Efficiency Mapping
-1. Adoption by Copilot Category
-Distribution of usage across categories (generation, refactoring, docs, boilerplate).
-Heavy skew towards boilerplate; advanced areas (refactoring, tests) underused; some categories unused due to lack of awareness.
-Provide category-focused training; create prompt libraries/templates; encourage multi-category experimentation.
-Moving usage from low-value (boilerplate) to high-value (tests/refactoring) drives higher time savings.
-3. Copilot Category vs. Time Reduced
-Correlation between category and time savings.
-Code generation → significant savings; documentation → slight savings; some categories inconsistent.
-Expand high-impact categories (gen/tests); reduce low-impact reliance (docs); track trends post-training.
-Shifting work to high-impact categories maximizes efficiency per usage hour.
-4. Split Across Time Reduced (Significant, Moderate, Slight, Not Feasible)
-Distribution of tickets by level of time saved.
-Many “slight” → under-leverage; many “not feasible” → prompt/domain/setup issues.
-Investigate “not feasible” cases; share prompting best practices; track feasibility % quarterly.
-More “significant” tickets = exponential efficiency.
-5. Ticket Size vs. Copilot Category Count
-Usage patterns across small/medium/large tickets and # of categories used.
-Skew to small tickets → missing efficiency in large; larger tickets use multiple categories (compound benefit).
-Encourage usage on medium/large tickets; guidelines: “Use ≥2 categories for large tickets”; measure efficiency per story point.
-Moving Copilot from small → large tickets increases weighted efficiency gains.
-6. Total Efficiency Gain
-Aggregated productivity gain.
-Quantifies ROI; trends show compounding vs stagnation.
-Establish baseline (e.g., 20% gain); track quarterly; set targets for leadership.
-Direct ROI measure linking adoption strategy to outcomes.
-7. Efficiency by Usage Category
-Which categories deliver most efficiency.
-Code generation & test automation lead; some categories low adoption + low efficiency.
-Focus on high-efficiency + medium adoption categories; de-prioritize low ROI ones.
-Optimized allocation of dev time → maximized ROI.
-8. Efficiency by Story Point
-Impact by ticket size (SP buckets).
-Small tickets marginal benefit; 5SP+ show compounding savings.
-Prioritize Copilot for medium-large SP; “Copilot mandatory for 5SP+”.
-Story-point weighted efficiency drives larger ROI.
-9. Efficiency by Ticket Size
-Efficiency vs ticket size (small/medium/large).
-Efficiency plateaus for very large tickets; small tickets show wasted effort.
-Balance adoption; study scalability issues; supplement very large with other methods.
-Aligning usage with optimal ticket sizes boosts aggregate ROI.
-
-
-📌 Executive Summary (Condensed)
-Metric
-Data
-So What
-Next Step
-Adoption (App level)
-68% used (541), 32% not used (267)
-Copilot embedded in flow, but 1/3 issues untouched.
-Scan “not used” → separate not applicable vs missed opportunity.
-Adoption (Category)
-Improvement 29%, Generation 26%, Quality 24%, Understanding 20%
-Reliance on high ROI areas (Improvement/Gen).
-Double-down enablement & prompt packs for Improvement & Gen; encourage Testing/Quality as add-ons.
-Efficiency (Category)
-Improvement 8%, Generation 7%, Quality 4%, Understanding 4%
-ROI highest for writing/upgrading code; lower for docs/understanding.
-Make Improvement/Gen default; add checklists/review bots for Quality/Understanding.
-Efficiency (Story Points)
-13SP: 11%, 5/8SP: 8%, 1–3SP: 5–6%, 30SP: 0%
-Mid-sized stories are sweet spot; small too trivial, large too complex.
-Decompose large stories; enforce Copilot on 5–13 SP stories.
-Efficiency (Ticket Size)
-Medium 7%, Large 7%, Small 5%
-Small tickets underperform; medium/large better ROI.
-Provide prompt recipes for medium/large; skip trivial small tasks.
-Time Reduction Mix
-Significant 7%, Moderate 12%, Slight 40%, None 8%, Not used 32%
-Most tickets only “slight/moderate”; significant rare.
-Upgrade prompts/context to shift slight → moderate/significant.
-Usage by Size × Category
-Small: 35% not applicable; Medium: balanced; Large: Improvement dominates (39%).
-Copilot used well on large work; small tickets underleveraged.
-For repetitive small tickets → one-click prompt templates.
-
-
-🎯 Targeted Actions (Efficiency Lift)
-Action
-Expected Lift
-Scale winners (Gen & Improve): Publish 6–8 prompt recipes (API handler+tests, refactor, migrations).
-+0.4–0.8 pp avg time saved across all issues if “slight” → “moderate/significant” for 10%.
-Decompose 30SP stories into 5–13 SP
-Converts 0% → 8–11% gains.
-Raise floor for small tickets: “gen + tests” micro-prompts.
-Moves small from 5% → 6–7%; frees focus for bigger tasks.
-Fix Quality category inconsistency: lint/fix prompts, static analysis, PR review checklists.
-Converting 10% “no reduction” → slight adds measurable gains.
-Shrink “not used” pool (32%): Target applicable subset (bugs, refactors, new endpoints).
-Converting 10% not used → moderate adds +0.48 pp avg time saved.
-
-
+Areas of Strength – Technical, Operating Effectiveness, Teamwork
+Yath is technically strong in understanding the problem statement and what the user is asking for, and he is proactive in driving the solution. He makes sure things are delivered on time and follows up proactively when there are any challenges. For example, while working on the additional APIs for risk assessment, he proactively shared his approach, got it reviewed, and incorporated the feedback into the API request. He is also approachable and works collaboratively to understand different use cases, especially around identifying scenarios where data issues can happen.
+Areas of Improvement – Judgment
+One area I would like Yath to focus on is looking at the bigger picture beyond the immediate task. Understanding how his contribution will be used as part of the overall product will help him identify potential edge cases and data issues earlier. With more of this product-level thinking, I believe he can become more proactive in identifying worst-case scenarios and adding value beyond the specific requirement being worked on.
 
