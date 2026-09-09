@@ -1,5 +1,43 @@
 
 
+
+
+**Areas of Strength — Technical/Functional Expertise, Teamwork, Operating Effectiveness**
+
+Akshay has demonstrated strong technical and functional expertise, particularly in his work on the reassessment features, where he quickly understood the existing code complexity and requirements with minimal hand-holding. He is effective at translating requirements into an execution plan and proactively driving work to completion. He also collaborates well with team members by coordinating and distributing tasks effectively, while balancing multiple commitments such as audit-related work. His ability to independently navigate dependencies, seek the right inputs, and keep delivery moving demonstrates strong operating effectiveness and ownership.
+
+**Area of Improvement — Communication**
+
+Akshay’s key development area is communication, particularly in storytelling and tailoring his message to the audience. During demos and discussions, there have been instances where, when asked a specific question, he explained the broader process rather than directly addressing the information being sought. Going forward, he should focus on reading the room, identifying the underlying question or audience need, and providing a concise, targeted response before adding additional context. Strengthening this skill will help him articulate his work and impact more effectively and make his strong execution more visible to stakeholders.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 WITH boundaries AS
 (
     SELECT
