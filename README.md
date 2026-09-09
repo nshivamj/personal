@@ -1,5 +1,1 @@
-**What is one thing your manager does well and should keep doing?**
-Raj has a strong understanding of the technology and business context and is quickly able to understand the leadership ask and recommend the right approach. He is also very approachable and does a great job of mentoring and supporting people in their growth. He should continue using this expertise to guide the team, identify pain points, and bring the right perspective to discussions.
-
-**One thing to recommend to your manager to be more effective:**
-I would recommend that Raj take more initiative in proactively reviewing the broader project, identifying gaps or areas where the approach can improve, and advising on the right solution. He already raises these points, but I would like him to be more aggressive in driving adoption—setting the standard, following up, and making sure the right approach is consistently followed across the team rather than being taken for granted. Given his technical and business knowledge, he can also look beyond what is currently on his plate, identify what more can be done, make those ideas visible to leadership, and take the lead in getting them implemented by collaborating with engineers and other leaders. This would help him drive a broader impact across the team.
+tbd
